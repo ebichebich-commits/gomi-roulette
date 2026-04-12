@@ -1,6 +1,7 @@
 # 個人・ローカル専用（リポジトリに含めない）
 duty_history.json
 members.csv
+roulette_paths.json
 
 # Python
 __pycache__/

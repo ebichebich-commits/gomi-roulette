@@ -5,15 +5,19 @@ import random
 import json
 import os
 import csv
+import subprocess
 
 # ==========================================
 # 設定エリア
 # ==========================================
-# 名簿ファイル名（このスクリプトと同じ場所に置いてください）
+# 名簿・履歴ファイル名（実体は data_dir 内）
 CSV_FILE = "members.csv"
-
-# データ保存用ファイル名（自動生成されます）
 DATA_FILE = "duty_history.json"
+
+# 別リポジトリのクローン先を指定する JSON（このファイルは Git に含めない）
+PATHS_CONFIG_NAME = "roulette_paths.json"
+
+# 環境変数 GOMI_ROULETTE_DATA_DIR があれば最優先（クローン先の絶対パス）
 
 # CSVがない場合のデフォルトメンバー（テスト用）
 DEFAULT_MEMBERS = ["メンバーA", "メンバーB", "メンバーC", "メンバーD"]
@@ -24,6 +28,66 @@ PENALTY_RATE = 10
 ROLE_GOMI = "gomi"
 ROLE_SOUJI = "souji"
 
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _read_paths_config():
+    p = os.path.join(_SCRIPT_DIR, PATHS_CONFIG_NAME)
+    if not os.path.isfile(p):
+        return {}
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def resolve_data_directory():
+    """members.csv / duty_history.json を置くディレクトリ（非公開リポジトリのクローン推奨）"""
+    raw = os.environ.get("GOMI_ROULETTE_DATA_DIR", "").strip()
+    if not raw:
+        cfg = _read_paths_config()
+        raw = (cfg.get("data_repo_dir") or "").strip()
+    if not raw:
+        return _SCRIPT_DIR
+    expanded = os.path.abspath(os.path.expanduser(raw))
+    if os.path.isdir(expanded):
+        return expanded
+    return _SCRIPT_DIR
+
+
+def should_auto_git_pull():
+    cfg = _read_paths_config()
+    if "auto_git_pull_on_startup" in cfg:
+        return bool(cfg["auto_git_pull_on_startup"])
+    return True
+
+
+def sync_private_data_repo(data_dir):
+    """
+    data_dir が git クローンなら git pull --ff-only。
+    戻り値: None=スキップ, (0,None)=成功, (code, err)=失敗メッセージ用
+    """
+    if not os.path.isdir(os.path.join(data_dir, ".git")):
+        return None
+    try:
+        r = subprocess.run(
+            ["git", "-C", data_dir, "pull", "--ff-only"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if r.returncode == 0:
+            return (0, None)
+        err = (r.stderr or r.stdout or "").strip() or f"exit {r.returncode}"
+        return (r.returncode, err)
+    except FileNotFoundError:
+        return (-1, "git コマンドが見つかりません（Git for Windows を入れてください）")
+    except subprocess.TimeoutExpired:
+        return (-1, "git pull がタイムアウトしました")
+    except OSError as e:
+        return (-1, str(e))
+
 
 class DutyRouletteApp:
     def __init__(self, root):
@@ -31,6 +95,27 @@ class DutyRouletteApp:
         self.root.title("ゴミ捨て・掃除当番ルーレット")
         self.root.geometry("1600x1000")
         self.root.resizable(False, False)#??????????????????????????????
+
+        cfg_raw = (os.environ.get("GOMI_ROULETTE_DATA_DIR", "").strip()
+                   or (_read_paths_config().get("data_repo_dir") or "").strip())
+        self.data_dir = resolve_data_directory()
+        self.csv_path = os.path.join(self.data_dir, CSV_FILE)
+        self.data_path = os.path.join(self.data_dir, DATA_FILE)
+
+        if cfg_raw and self.data_dir == _SCRIPT_DIR:
+            messagebox.showwarning(
+                "データフォルダ",
+                f"設定のデータフォルダが見つかりませんでした:\n{cfg_raw}\n\n"
+                f"スクリプトと同じ場所を使います:\n{_SCRIPT_DIR}",
+            )
+        elif should_auto_git_pull():
+            pull_result = sync_private_data_repo(self.data_dir)
+            if pull_result and pull_result[0] not in (0, None):
+                messagebox.showwarning(
+                    "git pull",
+                    f"データの取得に失敗しました（オフラインの可能性があります）。\n"
+                    f"手元のファイルで続行します。\n\n{pull_result[1]}",
+                )
 
         # 1. 名簿CSVの読み込み
         self.all_members = self.load_members_from_csv()
@@ -82,6 +167,7 @@ class DutyRouletteApp:
         self.canvas.pack(pady=50)
 
         status_text = (
+            f"データフォルダ: {self.data_dir}  |  "
             f"総メンバー: {len(self.all_members)}人 / "
             f"ゴミ残り: {len(self.candidates_gomi)} / 掃除残り: {len(self.candidates_souji)}"
         )
@@ -148,6 +234,13 @@ class DutyRouletteApp:
             command=self.clear_weekly_exclusions,
         ).pack(pady=(0, 10))
 
+        tk.Button(
+            self.right_frame,
+            text="データを更新（git pull）",
+            font=("Meiryo", 10),
+            command=self.on_pull_data_repo,
+        ).pack(pady=(0, 8))
+
         tk.Label(self.right_frame, text="【 危険度ランキング 】", font=("Meiryo", 18, "bold"), bg="#f0f0f0").pack(pady=20)
 
         self.ranking_box = tk.Text(self.right_frame, font=("Meiryo", 14), width=30, height=22, bg="#f0f0f0", bd=0)
@@ -208,7 +301,7 @@ class DutyRouletteApp:
         d["pair_session_excluded"] = []
         d["last_gomi_winner"] = None
         try:
-            with open(DATA_FILE, "w", encoding="utf-8") as f:
+            with open(self.data_path, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=4)
         except OSError:
             pass
@@ -347,14 +440,24 @@ class DutyRouletteApp:
             self.ranking_box.insert(tk.END, f"{rank_icon} {member}\n")
             self.ranking_box.insert(tk.END, f"    倍率: {w:.2f}倍 (確率: {prob:.1f}%)\n\n")
 
+    def on_pull_data_repo(self):
+        r = sync_private_data_repo(self.data_dir)
+        if r is None:
+            messagebox.showinfo("データ更新", "このフォルダは git リポジトリではありません。\nroulette_paths.json の data_repo_dir を確認してください。")
+            return
+        if r[0] == 0:
+            messagebox.showinfo("データ更新", "git pull が完了しました。\nアプリを一度終了して起動し直すと反映されます。")
+        else:
+            messagebox.showwarning("データ更新", f"git pull に失敗しました。\n\n{r[1]}")
+
     def load_members_from_csv(self):
         members = []
-        if not os.path.exists(CSV_FILE):
+        if not os.path.exists(self.csv_path):
             self.create_default_csv()
             return DEFAULT_MEMBERS
 
         try:
-            with open(CSV_FILE, newline='', encoding='utf-8') as f:
+            with open(self.csv_path, newline='', encoding='utf-8') as f:
                 reader = csv.reader(f)
                 for row in reader:
                     if row and row[0].strip():
@@ -362,7 +465,7 @@ class DutyRouletteApp:
             return members
         except UnicodeDecodeError:
             try:
-                with open(CSV_FILE, newline='', encoding='cp932') as f:
+                with open(self.csv_path, newline='', encoding='cp932') as f:
                     reader = csv.reader(f)
                     members = [row[0].strip() for row in reader if row and row[0].strip()]
                 return members
@@ -374,7 +477,7 @@ class DutyRouletteApp:
 
     def create_default_csv(self):
         try:
-            with open(CSV_FILE, 'w', newline='', encoding='utf-8') as f:
+            with open(self.csv_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 for m in DEFAULT_MEMBERS:
                     writer.writerow([m])
@@ -382,9 +485,9 @@ class DutyRouletteApp:
             pass
 
     def load_history(self):
-        if os.path.exists(DATA_FILE):
+        if os.path.exists(self.data_path):
             try:
-                with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                with open(self.data_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     return data
             except:
@@ -400,7 +503,7 @@ class DutyRouletteApp:
         self.history_data["weights_souji"] = self.weights_souji
         self.history_data["pair_pending_souji"] = False
         self.history_data["pair_session_excluded"] = []
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+        with open(self.data_path, 'w', encoding='utf-8') as f:
             json.dump(self.history_data, f, ensure_ascii=False, indent=4)
 
     def show_large_winner_dialog(self, role, winner, win_rate_pct):
@@ -702,6 +805,7 @@ class DutyRouletteApp:
         )
         self.status_label.config(
             text=(
+                f"データフォルダ: {self.data_dir}  |  "
                 f"総メンバー: {len(self.all_members)}人 / "
                 f"ゴミ残り: {len(self.candidates_gomi)} / 掃除残り: {len(self.candidates_souji)}"
             )
