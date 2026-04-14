@@ -31,6 +31,20 @@ ROLE_SOUJI = "souji"
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def compute_candidate_pools(all_members, done_gomi, done_souji):
+    """
+    どちらか片方でも完了した人は、両方のルーレットから除外する。
+    - ゴミだけ完了  -> ゴミ/掃除どちらにも出ない
+    - 掃除だけ完了  -> ゴミ/掃除どちらにも出ない
+    - 両方完了      -> ゴミ/掃除どちらにも出ない
+    - 両方未完了    -> ゴミ/掃除どちらにも出る
+    """
+    dg, ds = set(done_gomi), set(done_souji)
+    neither = [m for m in all_members if m not in dg and m not in ds]
+    # ゴミ・掃除ともに「両方未完了」の人だけを候補にする
+    return list(neither), list(neither)
+
+
 def _read_paths_config():
     p = os.path.join(_SCRIPT_DIR, PATHS_CONFIG_NAME)
     if not os.path.isfile(p):
@@ -141,9 +155,10 @@ class DutyRouletteApp:
         # 4. 全員が両方終わったらリセット
         self.check_cycle_reset()
 
-        # 5. 役割ごとの候補
-        self.candidates_gomi = [m for m in self.all_members if m not in self.done_gomi]
-        self.candidates_souji = [m for m in self.all_members if m not in self.done_souji]
+        # 5. 役割ごとの候補（片方完了者はもう片方のルーレットからも消す）
+        self.candidates_gomi, self.candidates_souji = compute_candidate_pools(
+            self.all_members, self.done_gomi, self.done_souji
+        )
         # 除外リスト用（どちらかの役まだ残っている人）
         self.candidates = sorted(
             set(self.candidates_gomi) | set(self.candidates_souji),
@@ -797,8 +812,9 @@ class DutyRouletteApp:
             self.refresh_info_spin_hint()
             self.update_ranking_display()
 
-        self.candidates_gomi = [m for m in self.all_members if m not in self.done_gomi]
-        self.candidates_souji = [m for m in self.all_members if m not in self.done_souji]
+        self.candidates_gomi, self.candidates_souji = compute_candidate_pools(
+            self.all_members, self.done_gomi, self.done_souji
+        )
         self.candidates = sorted(
             set(self.candidates_gomi) | set(self.candidates_souji),
             key=lambda x: self.all_members.index(x) if x in self.all_members else 0,
