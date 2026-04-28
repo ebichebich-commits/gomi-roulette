@@ -6,6 +6,12 @@ import json
 import os
 import csv
 import subprocess
+from datetime import datetime
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
 
 # ==========================================
 # 設定エリア
@@ -29,6 +35,13 @@ ROLE_GOMI = "gomi"
 ROLE_SOUJI = "souji"
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_WORKSPACE_DIR = os.path.dirname(_SCRIPT_DIR)
+
+PHOTO_DIR_CANDIDATES = (
+    os.path.join(_WORKSPACE_DIR, "Pictures"),
+    os.path.join(_SCRIPT_DIR, "Pictures"),
+)
+SUPPORTED_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
 
 
 def compute_candidate_pools(all_members, done_gomi, done_souji):
@@ -77,6 +90,44 @@ def should_auto_git_pull():
     return True
 
 
+def _parse_date_folder_to_ymd(name):
+    """日付フォルダ名を (year, month, day) に変換。解析できない場合は None。"""
+    s = (name or "").strip()
+    if not s:
+        return None
+    normalized = s.replace("_", "-").replace("/", "-")
+    parts = [p for p in normalized.split("-") if p]
+    now = datetime.now()
+
+    # YYYY-MM-DD
+    if len(parts) == 3 and all(p.isdigit() for p in parts):
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+    # M-D
+    elif len(parts) == 2 and all(p.isdigit() for p in parts):
+        y, m, d = now.year, int(parts[0]), int(parts[1])
+    # YYYYMMDD
+    elif s.isdigit() and len(s) == 8:
+        y, m, d = int(s[:4]), int(s[4:6]), int(s[6:8])
+    # MMDD
+    elif s.isdigit() and len(s) == 4:
+        y, m, d = now.year, int(s[:2]), int(s[2:4])
+    else:
+        return None
+
+    try:
+        datetime(y, m, d)
+        return (y, m, d)
+    except ValueError:
+        return None
+
+
+def resolve_pictures_root():
+    for p in PHOTO_DIR_CANDIDATES:
+        if os.path.isdir(p):
+            return p
+    return PHOTO_DIR_CANDIDATES[0]
+
+
 def sync_private_data_repo(data_dir):
     """
     data_dir が git クローンなら git pull --ff-only。
@@ -107,14 +158,16 @@ class DutyRouletteApp:
     def __init__(self, root):
         self.root = root
         self.root.title("ゴミ捨て・掃除当番ルーレット")
-        self.root.geometry("1600x1000")
-        self.root.resizable(False, False)#??????????????????????????????
+        self.root.state("zoomed")
+        self.root.resizable(True, True)
 
         cfg_raw = (os.environ.get("GOMI_ROULETTE_DATA_DIR", "").strip()
                    or (_read_paths_config().get("data_repo_dir") or "").strip())
         self.data_dir = resolve_data_directory()
         self.csv_path = os.path.join(self.data_dir, CSV_FILE)
         self.data_path = os.path.join(self.data_dir, DATA_FILE)
+        self.pictures_root = resolve_pictures_root()
+        self.weekly_photo_tk = None
 
         if cfg_raw and self.data_dir == _SCRIPT_DIR:
             messagebox.showwarning(
@@ -175,28 +228,57 @@ class DutyRouletteApp:
         self.left_frame = tk.Frame(root, bg="white")
         self.left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.right_frame = tk.Frame(root, bg="#f0f0f0", width=400)
+        self.right_frame = tk.Frame(root, bg="#f0f0f0", width=420)
         self.right_frame.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.canvas = tk.Canvas(root, width=900, height=900, bg="white")
-        self.canvas.pack(pady=50)
+        # 左側余白を「今週の1枚」表示に使う
+        self.photo_panel = tk.Frame(self.left_frame, bg="#efefef", width=260)
+        self.photo_panel.pack(side=tk.LEFT, fill=tk.Y)
+        self.photo_panel.pack_propagate(False)
+
+        tk.Label(self.photo_panel, text="今週の1枚！！", font=("Meiryo", 14, "bold"), bg="#efefef").pack(pady=(16, 8))
+        self.weekly_photo_canvas = tk.Canvas(
+            self.photo_panel,
+            bg="#e8e8e8",
+            width=230,
+            height=360,
+            highlightthickness=0,
+        )
+        self.weekly_photo_canvas.pack(padx=10, pady=(0, 6))
+        self.weekly_photo_path_label = tk.Label(
+            self.photo_panel,
+            text="",
+            font=("Meiryo", 9),
+            bg="#efefef",
+            fg="#666666",
+            wraplength=230,
+            justify=tk.CENTER,
+        )
+        self.weekly_photo_path_label.pack(padx=8, pady=(0, 10))
+
+        self.center_frame = tk.Frame(self.left_frame, bg="white")
+        self.center_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.canvas = tk.Canvas(self.center_frame, bg="white", highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True, pady=(10, 8), padx=(0, 4))
 
         status_text = (
             f"データフォルダ: {self.data_dir}  |  "
             f"総メンバー: {len(self.all_members)}人 / "
             f"ゴミ残り: {len(self.candidates_gomi)} / 掃除残り: {len(self.candidates_souji)}"
         )
-        self.status_label = tk.Label(root, text=status_text, font=("Meiryo", 10))
+        self.status_label = tk.Label(self.center_frame, text=status_text, font=("Meiryo", 10), bg="white")
         self.status_label.pack()
 
-        self.info_label = tk.Label(root, text="", font=("Meiryo", 12), justify=tk.CENTER)
+        self.info_label = tk.Label(self.center_frame, text="", font=("Meiryo", 12), justify=tk.CENTER, bg="white")
         self.info_label.pack()
 
         self.winner_label = tk.Label(
-            root,
+            self.center_frame,
             text="",
             font=("Meiryo", 32, "bold"),
             fg="#c0392b",
+            bg="white",
             wraplength=850,
             justify=tk.CENTER,
         )
@@ -262,6 +344,7 @@ class DutyRouletteApp:
         self.ranking_box.pack(padx=20, pady=10)
 
         self.update_ranking_display()
+        self.load_weekly_photo()
         self.refresh_info_spin_hint()
 
         self.angle = 0
@@ -465,6 +548,102 @@ class DutyRouletteApp:
         else:
             messagebox.showwarning("データ更新", f"git pull に失敗しました。\n\n{r[1]}")
 
+    def _list_weekly_photo_candidates(self):
+        """Pictures 配下の日付フォルダの画像候補を返す。"""
+        root = self.pictures_root
+        if not os.path.isdir(root):
+            return None, []
+
+        dated_dirs = []
+        for entry in os.listdir(root):
+            full = os.path.join(root, entry)
+            if not os.path.isdir(full):
+                continue
+            ymd = _parse_date_folder_to_ymd(entry)
+            if ymd is not None:
+                dated_dirs.append((ymd, full))
+
+        if not dated_dirs:
+            return None, []
+
+        now = datetime.now()
+        today_ymd = (now.year, now.month, now.day)
+        target_dir = None
+        for ymd, full in dated_dirs:
+            if ymd == today_ymd:
+                target_dir = full
+                break
+        if target_dir is None:
+            target_dir = sorted(dated_dirs, key=lambda x: x[0], reverse=True)[0][1]
+
+        files = []
+        for name in sorted(os.listdir(target_dir)):
+            p = os.path.join(target_dir, name)
+            ext = os.path.splitext(name)[1].lower()
+            if os.path.isfile(p) and ext in SUPPORTED_IMAGE_EXTS:
+                files.append(p)
+        return target_dir, files
+
+    def load_weekly_photo(self):
+        target_dir, files = self._list_weekly_photo_candidates()
+        canvas_w = max(self.weekly_photo_canvas.winfo_width(), 230)
+        canvas_h = max(self.weekly_photo_canvas.winfo_height(), 360)
+        if not target_dir:
+            self.weekly_photo_canvas.delete("all")
+            self.weekly_photo_canvas.create_text(
+                canvas_w // 2, canvas_h // 2,
+                text=f"画像フォルダがありません\n{self.pictures_root}",
+                font=("Meiryo", 11),
+                justify=tk.CENTER,
+            )
+            self.weekly_photo_path_label.config(text="")
+            self.weekly_photo_tk = None
+            return
+        if not files:
+            self.weekly_photo_canvas.delete("all")
+            self.weekly_photo_canvas.create_text(
+                canvas_w // 2, canvas_h // 2,
+                text=f"画像がありません\n{target_dir}",
+                font=("Meiryo", 11),
+                justify=tk.CENTER,
+            )
+            self.weekly_photo_path_label.config(text="")
+            self.weekly_photo_tk = None
+            return
+
+        # 複数枚ある場合はランダムで1枚を表示（毎回起動時に変わる）
+        chosen = random.choice(files)
+        try:
+            max_w = max(canvas_w - 8, 100)
+            max_h = max(canvas_h - 8, 120)
+            if Image is not None and ImageTk is not None:
+                pil_img = Image.open(chosen)
+                pil_img.thumbnail((max_w, max_h))
+                self.weekly_photo_tk = ImageTk.PhotoImage(pil_img)
+            else:
+                img = tk.PhotoImage(file=chosen)
+                source_w = max(img.width(), 1)
+                source_h = max(img.height(), 1)
+                ratio = min(max_w / source_w, max_h / source_h, 1.0)
+                scaled = img
+                if ratio < 1.0:
+                    step = max(int(1 / ratio), 1)
+                    scaled = img.subsample(step, step)
+                self.weekly_photo_tk = scaled
+            self.weekly_photo_canvas.delete("all")
+            self.weekly_photo_canvas.create_image(canvas_w // 2, canvas_h // 2, image=self.weekly_photo_tk)
+            self.weekly_photo_path_label.config(text=os.path.basename(chosen))
+        except Exception:
+            self.weekly_photo_tk = None
+            self.weekly_photo_canvas.delete("all")
+            self.weekly_photo_canvas.create_text(
+                canvas_w // 2, canvas_h // 2,
+                text="画像の読み込みに失敗しました。\nJPG/JPEG を使う場合は\n`pip install pillow` を実行してください",
+                font=("Meiryo", 11),
+                justify=tk.CENTER,
+            )
+            self.weekly_photo_path_label.config(text=os.path.basename(chosen))
+
     def load_members_from_csv(self):
         members = []
         if not os.path.exists(self.csv_path):
@@ -651,8 +830,10 @@ class DutyRouletteApp:
     def draw_wheel(self):
         self.canvas.delete("all")
 
-        cx, cy = 450, 450
-        r = 430
+        c_w = max(self.canvas.winfo_width(), 600)
+        c_h = max(self.canvas.winfo_height(), 600)
+        cx, cy = c_w // 2, c_h // 2
+        r = max(min(c_w, c_h) // 2 - 32, 160)
 
         active = self.active_pool()
         if not self.candidates:
@@ -688,16 +869,26 @@ class DutyRouletteApp:
             ty = cy - (r * 0.65) * math.sin(text_rad)
 
             display_text = f"{member}\n(x{w:.1f})"
-            self.canvas.create_text(tx, ty, text=display_text, font=("Meiryo", 26, "bold"))
+            font_size = max(int(r * 0.065), 11)
+            self.canvas.create_text(tx, ty, text=display_text, font=("Meiryo", font_size, "bold"))
 
             current_angle += extent_angle
 
         rad = math.radians(self.angle)
-        hand_len = 250
+        hand_len = int(r * 0.58)
         hx = cx + hand_len * math.cos(rad)
         hy = cy - hand_len * math.sin(rad)
 
-        self.canvas.create_line(cx, cy, hx, hy, width=5, fill="black", arrow=tk.LAST, arrowshape=(260, 280, 36))
+        arrow_a = max(int(r * 0.60), 80)
+        arrow_b = max(int(r * 0.65), 90)
+        arrow_c = max(int(r * 0.085), 14)
+        self.canvas.create_line(
+            cx, cy, hx, hy,
+            width=max(int(r * 0.012), 3),
+            fill="black",
+            arrow=tk.LAST,
+            arrowshape=(arrow_a, arrow_b, arrow_c),
+        )
         self.canvas.create_oval(cx-10, cy-10, cx+10, cy+10, fill="white")
 
         role_label = "ゴミ捨て" if self.draw_role == ROLE_GOMI else "掃除"
@@ -707,7 +898,7 @@ class DutyRouletteApp:
                 sub += f"\n（今週のゴミ当選者 {self.session_gomi_winner} は除く）"
         else:
             sub = "【ゴミ当番の候補のみ表示中】※掃除は右のランキング参照"
-        self.canvas.create_text(cx, cy - r - 28, text=sub, font=("Meiryo", 14, "bold"))
+        self.canvas.create_text(cx, max(cy - r - 22, 20), text=sub, font=("Meiryo", 13, "bold"))
 
     def toggle_spin(self, event=None):
         if not self.is_spinning:
