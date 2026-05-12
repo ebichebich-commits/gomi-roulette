@@ -42,6 +42,8 @@ PHOTO_DIR_CANDIDATES = (
     os.path.join(_SCRIPT_DIR, "Pictures"),
 )
 SUPPORTED_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
+# 日付フォルダ内に画像が無いとき、同じフォルダの quiz.txt でクイズ表示（1行目=問題、2行目以降=答え）
+QUIZ_FILE_NAME = "quiz.txt"
 
 
 def compute_candidate_pools(all_members, done_gomi, done_souji):
@@ -128,6 +130,25 @@ def resolve_pictures_root():
     return PHOTO_DIR_CANDIDATES[0]
 
 
+def _read_weekly_quiz(target_dir):
+    """quiz.txt: 1行目=問題、2行目以降=答え（複数行可）。無ければ (None, None)。"""
+    if not target_dir:
+        return None, None
+    p = os.path.join(target_dir, QUIZ_FILE_NAME)
+    if not os.path.isfile(p):
+        return None, None
+    try:
+        with open(p, encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f.readlines() if ln.strip()]
+    except OSError:
+        return None, None
+    if not lines:
+        return None, None
+    q = lines[0]
+    a = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+    return q, (a if a else None)
+
+
 def sync_private_data_repo(data_dir):
     """
     data_dir が git クローンなら git pull --ff-only。
@@ -168,6 +189,8 @@ class DutyRouletteApp:
         self.data_path = os.path.join(self.data_dir, DATA_FILE)
         self.pictures_root = resolve_pictures_root()
         self.weekly_photo_tk = None
+        self.weekly_quiz_question = None
+        self.weekly_quiz_answer = None
 
         if cfg_raw and self.data_dir == _SCRIPT_DIR:
             messagebox.showwarning(
@@ -236,7 +259,10 @@ class DutyRouletteApp:
         self.photo_panel.pack(side=tk.LEFT, fill=tk.Y)
         self.photo_panel.pack_propagate(False)
 
-        tk.Label(self.photo_panel, text="今週の1枚！！", font=("Meiryo", 14, "bold"), bg="#efefef").pack(pady=(16, 8))
+        self.weekly_side_title = tk.Label(
+            self.photo_panel, text="今週の1枚！！", font=("Meiryo", 14, "bold"), bg="#efefef"
+        )
+        self.weekly_side_title.pack(pady=(16, 8))
         self.weekly_photo_canvas = tk.Canvas(
             self.photo_panel,
             bg="#e8e8e8",
@@ -391,18 +417,13 @@ class DutyRouletteApp:
         d.setdefault("pair_session_excluded", [])
 
     def discard_incomplete_pair_on_disk(self):
-        """掃除抽選まで終わらず終了していたデータは無効化してファイルに書き戻す"""
+        """掃除抽選まで終わらず終了していたデータは無効化する（メモリのみ。JSON への書き込みはセッション終了時）。"""
         d = self.history_data
         if not d.get("pair_pending_souji"):
             return
         d["pair_pending_souji"] = False
         d["pair_session_excluded"] = []
         d["last_gomi_winner"] = None
-        try:
-            with open(self.data_path, "w", encoding="utf-8") as f:
-                json.dump(d, f, ensure_ascii=False, indent=4)
-        except OSError:
-            pass
 
     def active_pool(self):
         """今回の役割のルーレット参加候補（除外・掃除時はゴミ当選者も除外）"""
@@ -584,11 +605,37 @@ class DutyRouletteApp:
                 files.append(p)
         return target_dir, files
 
+    def _resync_weekly_quiz_from_disk(self):
+        """quiz.txt があればメモリに載せ直す（画像あり週でも答え表示用）。"""
+        target_dir, _files = self._list_weekly_photo_candidates()
+        if not target_dir:
+            self.weekly_quiz_question = None
+            self.weekly_quiz_answer = None
+            return
+        q, a = _read_weekly_quiz(target_dir)
+        if q and a:
+            self.weekly_quiz_question = q
+            self.weekly_quiz_answer = a
+        else:
+            self.weekly_quiz_question = None
+            self.weekly_quiz_answer = None
+
     def load_weekly_photo(self):
         target_dir, files = self._list_weekly_photo_candidates()
         canvas_w = max(self.weekly_photo_canvas.winfo_width(), 230)
         canvas_h = max(self.weekly_photo_canvas.winfo_height(), 360)
+        self.weekly_quiz_question = None
+        self.weekly_quiz_answer = None
+
+        q_r, a_r = None, None
+        if target_dir:
+            q_r, a_r = _read_weekly_quiz(target_dir)
+        if q_r and a_r:
+            self.weekly_quiz_question = q_r
+            self.weekly_quiz_answer = a_r
+
         if not target_dir:
+            self.weekly_side_title.config(text="今週の1枚！！")
             self.weekly_photo_canvas.delete("all")
             self.weekly_photo_canvas.create_text(
                 canvas_w // 2, canvas_h // 2,
@@ -601,17 +648,33 @@ class DutyRouletteApp:
             return
         if not files:
             self.weekly_photo_canvas.delete("all")
-            self.weekly_photo_canvas.create_text(
-                canvas_w // 2, canvas_h // 2,
-                text=f"画像がありません\n{target_dir}",
-                font=("Meiryo", 11),
-                justify=tk.CENTER,
-            )
-            self.weekly_photo_path_label.config(text="")
             self.weekly_photo_tk = None
+            if q_r:
+                self.weekly_side_title.config(text="今週のクイズ！！")
+                self.weekly_photo_canvas.create_text(
+                    canvas_w // 2,
+                    canvas_h // 2,
+                    text=q_r,
+                    font=("Meiryo", 12, "bold"),
+                    fill="#222222",
+                    justify=tk.CENTER,
+                    width=max(canvas_w - 16, 80),
+                )
+                hint = "答えは今週の抽選がすべて終わったあとに表示します。" if a_r else "（答え行なし：quiz.txt の2行目以降）"
+                self.weekly_photo_path_label.config(text=hint)
+            else:
+                self.weekly_side_title.config(text="今週の1枚！！")
+                self.weekly_photo_canvas.create_text(
+                    canvas_w // 2, canvas_h // 2,
+                    text=f"画像がありません\n{target_dir}",
+                    font=("Meiryo", 11),
+                    justify=tk.CENTER,
+                )
+                self.weekly_photo_path_label.config(text="")
             return
 
         # 複数枚ある場合はランダムで1枚を表示（毎回起動時に変わる）
+        self.weekly_side_title.config(text="今週の1枚！！")
         chosen = random.choice(files)
         try:
             max_w = max(canvas_w - 8, 100)
@@ -643,6 +706,140 @@ class DutyRouletteApp:
                 justify=tk.CENTER,
             )
             self.weekly_photo_path_label.config(text=os.path.basename(chosen))
+
+    def open_quiz_answer_tab_after_full_session(self):
+        """
+        ゴミ・掃除の両抽選が終わったあと、画面下にタブ風の案内を出す。
+        「進」で大きく答えを表示する。
+        クイズが無い週はここで JSON にまとめて保存する。
+        """
+        self._resync_weekly_quiz_from_disk()
+        if not self.weekly_quiz_answer or not self.weekly_quiz_question:
+            self.persist_session_end_to_disk()
+            return
+        # 当選ダイアログの grab 解除直後は前面に出しにくいので少し遅らせる
+        self.root.after(120, self._open_quiz_tab_popup)
+
+    def _open_quiz_tab_popup(self):
+        self._resync_weekly_quiz_from_disk()
+        if not self.weekly_quiz_answer or not self.weekly_quiz_question:
+            self.persist_session_end_to_disk()
+            return
+
+        tab = tk.Toplevel(self.root)
+        tab.title("クイズ")
+        tab.transient(self.root)
+        tab.resizable(False, False)
+        tab.attributes("-topmost", True)
+
+        shell = tk.Frame(tab, bg="#1d3557", padx=3, pady=3)
+        shell.pack()
+        inner = tk.Frame(shell, bg="#a8dadc", padx=20, pady=12)
+        inner.pack()
+
+        tk.Label(
+            inner,
+            text="今週のクイズ　答えはこちら",
+            font=("Meiryo", 13, "bold"),
+            bg="#a8dadc",
+            fg="#1d3557",
+        ).pack(side=tk.LEFT)
+
+        def on_go():
+            try:
+                tab.grab_release()
+            except tk.TclError:
+                pass
+            tab.destroy()
+            self._show_quiz_answer_reveal_big()
+
+        btn = tk.Button(
+            inner,
+            text="進",
+            font=("Meiryo", 15, "bold"),
+            width=4,
+            command=on_go,
+            bg="#e63946",
+            fg="white",
+            activebackground="#c1121f",
+            activeforeground="white",
+            relief=tk.FLAT,
+            padx=8,
+            pady=4,
+        )
+        btn.pack(side=tk.LEFT, padx=(16, 4))
+
+        tab.update_idletasks()
+        tw = max(tab.winfo_reqwidth(), 320)
+        th = max(tab.winfo_reqheight(), 48)
+        sw, sh = tab.winfo_screenwidth(), tab.winfo_screenheight()
+        x = max(0, (sw - tw) // 2)
+        y = max(0, (sh - th) // 2)
+        tab.geometry(f"{tw}x{th}+{x}+{y}")
+        tab.grab_set()
+        tab.lift()
+        tab.focus_force()
+
+    def _show_quiz_answer_reveal_big(self):
+        big = tk.Toplevel(self.root)
+        big.title("今週のクイズ・答え")
+        big.transient(self.root)
+        big.grab_set()
+        big.configure(bg="#1a1a2e")
+        big.resizable(True, True)
+        big.state("zoomed")
+
+        tk.Label(
+            big,
+            text="答え",
+            font=("Meiryo", 36),
+            fg="#a8dadc",
+            bg="#1a1a2e",
+        ).pack(pady=(48, 16))
+
+        ans = self.weekly_quiz_answer
+        wrap = max(big.winfo_screenwidth() - 120, 400)
+        tk.Label(
+            big,
+            text=ans,
+            font=("Meiryo", 56, "bold"),
+            fg="#ff6b6b",
+            bg="#1a1a2e",
+            wraplength=wrap,
+            justify=tk.CENTER,
+        ).pack(expand=True, fill=tk.BOTH, padx=40, pady=20)
+
+        def on_ok():
+            try:
+                big.grab_release()
+            except tk.TclError:
+                pass
+            big.destroy()
+            self._finalize_quiz_session_save_and_quit()
+            self.root.destroy()
+
+        tk.Button(
+            big,
+            text="OK",
+            font=("Meiryo", 20),
+            width=12,
+            command=on_ok,
+        ).pack(pady=(0, 48))
+
+    def persist_session_end_to_disk(self):
+        """先週までの実施状況・今週の担当を JSON にまとめて保存する（セッション終了時のみ）。"""
+        self.history_data["session_close_snapshot"] = {
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "done_gomi": list(self.done_gomi),
+            "done_souji": list(self.done_souji),
+            "this_week_gomi_winner": self.last_gomi_winner,
+            "this_week_souji_winner": self.last_souji_winner,
+        }
+        self.save_data()
+
+    def _finalize_quiz_session_save_and_quit(self):
+        """クイズ答え画面の OK からだけ呼ぶ（保存後は呼び出し側で root.destroy）。"""
+        self.persist_session_end_to_disk()
 
     def load_members_from_csv(self):
         members = []
@@ -689,6 +886,7 @@ class DutyRouletteApp:
         return {}
 
     def save_data(self):
+        """duty_history.json に現在のメモリ状態を書き込む。"""
         self.history_data["last_gomi_winner"] = self.last_gomi_winner
         self.history_data["last_souji_winner"] = self.last_souji_winner
         self.history_data["done_gomi"] = self.done_gomi
@@ -805,7 +1003,7 @@ class DutyRouletteApp:
                 f"{last}さんの{duty_name}当番：当選確率が{(PENALTY_RATE-1)*100}%アップ！！",
             )
 
-        self.save_data()
+        # 先週の回答はメモリのみ。JSON 保存はクイズ OK 後（またはクイズなしで抽選終了時）にまとめて行う。
 
     def check_cycle_reset(self):
         member_set = set(self.all_members)
@@ -825,6 +1023,7 @@ class DutyRouletteApp:
             self.last_souji_winner = None
             self.history_data["pair_pending_souji"] = False
             self.history_data["pair_session_excluded"] = []
+            # 全員一周完了のリセットは次回起動ループ防止のため即保存（先週回答の遅延保存とは別）
             self.save_data()
 
     def draw_wheel(self):
@@ -990,7 +1189,6 @@ class DutyRouletteApp:
                 f"掃除：【 {winner} 】さん\n（掃除の当選確率 {win_rate:.1f}%）",
             )
             self.show_large_winner_dialog(role, winner, win_rate)
-            self.save_data()
 
             self.session_gomi_winner = None
             self.draw_role = ROLE_GOMI
@@ -1002,6 +1200,7 @@ class DutyRouletteApp:
             self.btn_cancel_exclusion_confirm.config(state=tk.DISABLED)
             self.refresh_info_spin_hint()
             self.update_ranking_display()
+            self.open_quiz_answer_tab_after_full_session()
 
         self.candidates_gomi, self.candidates_souji = compute_candidate_pools(
             self.all_members, self.done_gomi, self.done_souji
