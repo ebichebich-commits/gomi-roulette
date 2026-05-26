@@ -131,7 +131,7 @@ def resolve_pictures_root():
 
 
 def _read_weekly_quiz(target_dir):
-    """quiz.txt: 1行目=問題、2行目以降=答え（複数行可）。無ければ (None, None)。"""
+    """quiz.txt: A. / A: / 答え から下を答え、それより上を問題として読む。"""
     if not target_dir:
         return None, None
     p = os.path.join(target_dir, QUIZ_FILE_NAME)
@@ -144,8 +144,18 @@ def _read_weekly_quiz(target_dir):
         return None, None
     if not lines:
         return None, None
-    q = lines[0]
-    a = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+    answer_start = None
+    for i, line in enumerate(lines):
+        if line.startswith(("A.", "A:", "答え", "答:")):
+            answer_start = i
+            break
+
+    if answer_start is None:
+        q = lines[0]
+        a = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+    else:
+        q = "\n".join(lines[:answer_start]).strip()
+        a = "\n".join(lines[answer_start:]).strip()
     return q, (a if a else None)
 
 
