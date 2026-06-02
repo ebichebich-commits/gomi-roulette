@@ -29,6 +29,8 @@ PATHS_CONFIG_NAME = "roulette_paths.json"
 DEFAULT_MEMBERS = ["メンバーA", "メンバーB", "メンバーC", "メンバーD"]
 
 PENALTY_RATE = 10
+REPORT_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dQkSW-dIugdTNqJ4usAkveFnUkIfIhv-E9gh1wFX7O4/edit?usp=sharing"
+CLEANING_WIKI_URL = "https://www.hashimoto.lab.uec.ac.jp/intra/?%A5%B4%A5%DF%BC%CE%A4%C6%C5%F6%C8%D6"
 # ==========================================
 
 ROLE_GOMI = "gomi"
@@ -264,30 +266,34 @@ class DutyRouletteApp:
         self.right_frame = tk.Frame(root, bg="#f0f0f0", width=420)
         self.right_frame.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 左側余白を「今週の1枚」表示に使う
-        self.photo_panel = tk.Frame(self.left_frame, bg="#efefef", width=260)
+        # 左側余白を「今週の1枚」/「今週のクイズ」表示に使う
+        self.photo_panel = tk.Frame(self.left_frame, bg="#efefef", width=420)
         self.photo_panel.pack(side=tk.LEFT, fill=tk.Y)
         self.photo_panel.pack_propagate(False)
 
         self.weekly_side_title = tk.Label(
-            self.photo_panel, text="今週の1枚！！", font=("Meiryo", 14, "bold"), bg="#efefef"
+            self.photo_panel,
+            text="今週の1枚！！",
+            font=("Meiryo", 20, "bold"),
+            bg="#efefef",
+            fg="#222222",
         )
-        self.weekly_side_title.pack(pady=(16, 8))
+        self.weekly_side_title.pack(pady=(18, 10))
         self.weekly_photo_canvas = tk.Canvas(
             self.photo_panel,
             bg="#e8e8e8",
-            width=230,
-            height=360,
+            width=390,
+            height=500,
             highlightthickness=0,
         )
-        self.weekly_photo_canvas.pack(padx=10, pady=(0, 6))
+        self.weekly_photo_canvas.pack(padx=14, pady=(0, 8))
         self.weekly_photo_path_label = tk.Label(
             self.photo_panel,
             text="",
-            font=("Meiryo", 9),
+            font=("Meiryo", 11),
             bg="#efefef",
             fg="#666666",
-            wraplength=230,
+            wraplength=380,
             justify=tk.CENTER,
         )
         self.weekly_photo_path_label.pack(padx=8, pady=(0, 10))
@@ -374,10 +380,15 @@ class DutyRouletteApp:
             command=self.on_pull_data_repo,
         ).pack(pady=(0, 8))
 
-        tk.Label(self.right_frame, text="【 危険度ランキング 】", font=("Meiryo", 18, "bold"), bg="#f0f0f0").pack(pady=20)
+        tk.Label(self.right_frame, text="【 全体危険度ランキング 】", font=("Meiryo", 18, "bold"), bg="#f0f0f0").pack(pady=20)
 
-        self.ranking_box = tk.Text(self.right_frame, font=("Meiryo", 14), width=30, height=22, bg="#f0f0f0", bd=0)
-        self.ranking_box.pack(padx=20, pady=10)
+        ranking_frame = tk.Frame(self.right_frame, bg="#f0f0f0")
+        ranking_frame.pack(padx=20, pady=10, fill=tk.BOTH, expand=True)
+        self.ranking_box = tk.Text(ranking_frame, font=("Meiryo", 13), width=32, height=22, bg="#f0f0f0", bd=0)
+        ranking_scroll = tk.Scrollbar(ranking_frame, orient=tk.VERTICAL, command=self.ranking_box.yview)
+        self.ranking_box.config(yscrollcommand=ranking_scroll.set)
+        self.ranking_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        ranking_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.update_ranking_display()
         self.load_weekly_photo()
@@ -525,49 +536,45 @@ class DutyRouletteApp:
         self.update_ranking_display()
 
     def _ranking_block_for_role(self, role, exclude_names):
-        """テキスト用：役割ごとの候補と確率（exclude_names は集合・この中の名前は除く）"""
+        """テキスト用：全メンバーの倍率ランキング。状態も併記する。"""
         lines = []
-        base = [m for m in self.role_candidates(role) if m not in self.weekly_excluded]
-        active = [m for m in base if m not in exclude_names]
         wmap = self.role_weights(role)
-        sorted_members = sorted(active, key=lambda m: wmap.get(m, 1.0), reverse=True)
-        total_weight = sum(wmap.get(m, 1.0) for m in active)
+        sorted_members = sorted(self.all_members, key=lambda m: wmap.get(m, 1.0), reverse=True)
+        total_weight = sum(wmap.get(m, 1.0) for m in self.all_members)
         for i, member in enumerate(sorted_members):
             w = wmap.get(member, 1.0)
             prob = (w / total_weight) * 100 if total_weight > 0 else 0
             rank_icon = "👑" if i == 0 else f"{i+1}."
+            if member in self.weekly_excluded:
+                status = "今週除外"
+            elif member in exclude_names:
+                status = "今回のゴミ当番"
+            elif member in self.done_gomi or member in self.done_souji:
+                status = "今周完了済み"
+            else:
+                status = "抽選対象"
             lines.append(f"{rank_icon} {member}\n")
-            lines.append(f"    倍率: {w:.2f}倍 (確率: {prob:.1f}%)\n\n")
+            lines.append(f"    倍率: {w:.2f}倍 / 全体目安: {prob:.1f}% / {status}\n\n")
         return "".join(lines)
 
     def update_ranking_display(self):
         self.ranking_box.delete(1.0, tk.END)
 
         if not self.exclusions_confirmed:
-            self.ranking_box.insert(tk.END, "〔確定前：両方の候補を表示〕\n")
+            self.ranking_box.insert(tk.END, "〔確定前：全員分を表示〕\n")
             self.ranking_box.insert(tk.END, "1回目Space＝ゴミ／2回目＝掃除です。\n\n")
-            self.ranking_box.insert(tk.END, "── ゴミ捨て当番の候補 ──\n\n")
+            self.ranking_box.insert(tk.END, "── ゴミ捨て当番 ──\n\n")
             self.ranking_box.insert(tk.END, self._ranking_block_for_role(ROLE_GOMI, set()))
-            self.ranking_box.insert(tk.END, "── 掃除当番の候補 ──\n\n")
+            self.ranking_box.insert(tk.END, "── 掃除当番 ──\n\n")
             ex_gomi = {self.session_gomi_winner} if self.session_gomi_winner else set()
             self.ranking_box.insert(tk.END, self._ranking_block_for_role(ROLE_SOUJI, ex_gomi))
             return
 
         role = self.draw_role
         label = "ゴミ捨て当番" if role == ROLE_GOMI else "掃除当番"
-        self.ranking_box.insert(tk.END, f"〔{label}・今の抽選の確率〕\n\n")
-
-        active = self.active_pool()
-        wmap = self.role_weights(role)
-        sorted_members = sorted(active, key=lambda m: wmap.get(m, 1.0), reverse=True)
-        total_weight = sum(wmap.get(m, 1.0) for m in active)
-
-        for i, member in enumerate(sorted_members):
-            w = wmap.get(member, 1.0)
-            prob = (w / total_weight) * 100 if total_weight > 0 else 0
-            rank_icon = "👑" if i == 0 else f"{i+1}."
-            self.ranking_box.insert(tk.END, f"{rank_icon} {member}\n")
-            self.ranking_box.insert(tk.END, f"    倍率: {w:.2f}倍 (確率: {prob:.1f}%)\n\n")
+        self.ranking_box.insert(tk.END, f"〔{label}・全体ランキング〕\n\n")
+        ex_gomi = {self.session_gomi_winner} if role == ROLE_SOUJI and self.session_gomi_winner else set()
+        self.ranking_box.insert(tk.END, self._ranking_block_for_role(role, ex_gomi))
 
     def on_pull_data_repo(self):
         r = sync_private_data_repo(self.data_dir)
@@ -632,8 +639,8 @@ class DutyRouletteApp:
 
     def load_weekly_photo(self):
         target_dir, files = self._list_weekly_photo_candidates()
-        canvas_w = max(self.weekly_photo_canvas.winfo_width(), 230)
-        canvas_h = max(self.weekly_photo_canvas.winfo_height(), 360)
+        canvas_w = max(self.weekly_photo_canvas.winfo_width(), 390)
+        canvas_h = max(self.weekly_photo_canvas.winfo_height(), 500)
         self.weekly_quiz_question = None
         self.weekly_quiz_answer = None
 
@@ -645,7 +652,7 @@ class DutyRouletteApp:
             self.weekly_quiz_answer = a_r
 
         if not target_dir:
-            self.weekly_side_title.config(text="今週の1枚！！")
+            self.weekly_side_title.config(text="今週の1枚！！", fg="#222222")
             self.weekly_photo_canvas.delete("all")
             self.weekly_photo_canvas.create_text(
                 canvas_w // 2, canvas_h // 2,
@@ -660,20 +667,45 @@ class DutyRouletteApp:
             self.weekly_photo_canvas.delete("all")
             self.weekly_photo_tk = None
             if q_r:
-                self.weekly_side_title.config(text="今週のクイズ！！")
+                self.weekly_side_title.config(text="今週のクイズ！！", fg="#d00000")
+                bubble_pad_x = 18
+                bubble_pad_y = 26
+                bubble_left = bubble_pad_x
+                bubble_top = 34
+                bubble_right = canvas_w - bubble_pad_x
+                bubble_bottom = canvas_h - 54
+                self.weekly_photo_canvas.create_rectangle(
+                    bubble_left,
+                    bubble_top,
+                    bubble_right,
+                    bubble_bottom,
+                    fill="#ffffff",
+                    outline="#d00000",
+                    width=3,
+                )
+                self.weekly_photo_canvas.create_polygon(
+                    canvas_w // 2 - 24,
+                    bubble_bottom,
+                    canvas_w // 2 + 28,
+                    bubble_bottom,
+                    canvas_w // 2,
+                    bubble_bottom + 28,
+                    fill="#ffffff",
+                    outline="#d00000",
+                )
                 self.weekly_photo_canvas.create_text(
                     canvas_w // 2,
                     canvas_h // 2,
                     text=q_r,
-                    font=("Meiryo", 12, "bold"),
+                    font=("Meiryo", 20, "bold"),
                     fill="#222222",
                     justify=tk.CENTER,
-                    width=max(canvas_w - 16, 80),
+                    width=max(canvas_w - 36, 160),
                 )
                 hint = "答えは今週の抽選がすべて終わったあとに表示します。" if a_r else "（答え行なし：quiz.txt の2行目以降）"
                 self.weekly_photo_path_label.config(text=hint)
             else:
-                self.weekly_side_title.config(text="今週の1枚！！")
+                self.weekly_side_title.config(text="今週の1枚！！", fg="#222222")
                 self.weekly_photo_canvas.create_text(
                     canvas_w // 2, canvas_h // 2,
                     text=f"画像がありません\n{target_dir}",
@@ -684,11 +716,18 @@ class DutyRouletteApp:
             return
 
         # 複数枚ある場合はランダムで1枚を表示（毎回起動時に変わる）
-        self.weekly_side_title.config(text="今週の1枚！！")
+        if q_r:
+            self.weekly_side_title.config(text="今週のクイズ！！", fg="#d00000")
+        else:
+            self.weekly_side_title.config(text="今週の1枚！！", fg="#222222")
         chosen = random.choice(files)
         try:
-            max_w = max(canvas_w - 8, 100)
-            max_h = max(canvas_h - 8, 120)
+            if q_r:
+                max_w = max(canvas_w - 24, 100)
+                max_h = max(canvas_h - 300, 120)
+            else:
+                max_w = max(canvas_w - 8, 100)
+                max_h = max(canvas_h - 8, 120)
             if Image is not None and ImageTk is not None:
                 pil_img = Image.open(chosen)
                 pil_img.thumbnail((max_w, max_h))
@@ -704,8 +743,46 @@ class DutyRouletteApp:
                     scaled = img.subsample(step, step)
                 self.weekly_photo_tk = scaled
             self.weekly_photo_canvas.delete("all")
-            self.weekly_photo_canvas.create_image(canvas_w // 2, canvas_h // 2, image=self.weekly_photo_tk)
-            self.weekly_photo_path_label.config(text=os.path.basename(chosen))
+            if q_r:
+                image_y = canvas_h - max_h // 2 - 16
+                self.weekly_photo_canvas.create_image(canvas_w // 2, image_y, image=self.weekly_photo_tk)
+                bubble_left = 18
+                bubble_top = 16
+                bubble_right = canvas_w - 18
+                bubble_bottom = 268
+                self.weekly_photo_canvas.create_rectangle(
+                    bubble_left,
+                    bubble_top,
+                    bubble_right,
+                    bubble_bottom,
+                    fill="#ffffff",
+                    outline="#d00000",
+                    width=3,
+                )
+                self.weekly_photo_canvas.create_polygon(
+                    canvas_w // 2 - 24,
+                    bubble_bottom,
+                    canvas_w // 2 + 28,
+                    bubble_bottom,
+                    canvas_w // 2,
+                    bubble_bottom + 28,
+                    fill="#ffffff",
+                    outline="#d00000",
+                )
+                self.weekly_photo_canvas.create_text(
+                    canvas_w // 2,
+                    (bubble_top + bubble_bottom) // 2,
+                    text=q_r,
+                    font=("Meiryo", 16, "bold"),
+                    fill="#222222",
+                    justify=tk.CENTER,
+                    width=max(canvas_w - 48, 160),
+                )
+                hint = "答えは今週の抽選がすべて終わったあとに表示します。" if a_r else "（答え行なし：quiz.txt の2行目以降）"
+                self.weekly_photo_path_label.config(text=f"{os.path.basename(chosen)} / {hint}")
+            else:
+                self.weekly_photo_canvas.create_image(canvas_w // 2, canvas_h // 2, image=self.weekly_photo_tk)
+                self.weekly_photo_path_label.config(text=os.path.basename(chosen))
         except Exception:
             self.weekly_photo_tk = None
             self.weekly_photo_canvas.delete("all")
@@ -846,6 +923,56 @@ class DutyRouletteApp:
             "this_week_souji_winner": self.last_souji_winner,
         }
         self.save_data()
+        self.copy_weekly_contact_message()
+
+    def build_weekly_contact_message(self):
+        """Teamsなどに貼る今週の当番連絡文。"""
+        gomi = self.last_gomi_winner or "未決定"
+        souji = self.last_souji_winner or "未決定"
+        return (
+            "ゴミ捨て→ \n\n"
+            f"{gomi}\n"
+            "掃除→ \n\n"
+            f"{souji}\n\n"
+            " ★★★★★★★★★★★★\n"
+            f"当番報告スプレッドシート（{REPORT_SPREADSHEET_URL} ）（←ここに報告！）\n"
+            "★★★★★★★★★★★★\n\n\n\n"
+            "・来週火曜日の時点できれいにしておくことを心がけてください！\n\n"
+            f"掃除・ゴミ捨て方法Wiki（{CLEANING_WIKI_URL} ）"
+        )
+
+    def copy_weekly_contact_message(self):
+        """連絡文をクリップボードとテキストファイルに残す。"""
+        message = self.build_weekly_contact_message()
+        saved_path = os.path.join(self.data_dir, "latest_teams_message.txt")
+        try:
+            with open(saved_path, "w", encoding="utf-8") as f:
+                f.write(message)
+        except Exception:
+            saved_path = None
+
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(message)
+            self.root.update()
+            if saved_path:
+                messagebox.showinfo(
+                    "連絡文をコピーしました",
+                    "Teamsに貼る連絡文をクリップボードにコピーしました。\n"
+                    f"同じ内容を保存しました:\n{saved_path}",
+                )
+            else:
+                messagebox.showinfo(
+                    "連絡文をコピーしました",
+                    "Teamsに貼る連絡文をクリップボードにコピーしました。",
+                )
+        except Exception:
+            if saved_path:
+                messagebox.showinfo(
+                    "連絡文を保存しました",
+                    "クリップボードへのコピーはできませんでしたが、連絡文を保存しました:\n"
+                    f"{saved_path}",
+                )
 
     def _finalize_quiz_session_save_and_quit(self):
         """クイズ答え画面の OK からだけ呼ぶ（保存後は呼び出し側で root.destroy）。"""

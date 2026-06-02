@@ -94,11 +94,34 @@ A. 磁場、くれ～。（地縛霊）
 4. 写真を見せたい週は、同じフォルダに画像も入れる。
 5. `python roulette.py` で起動する。
 
-## ブラウザから「どこでも」について
+## GitHub Pages で iPad などから開く
 
-このリポジトリのアプリは **Tkinter のデスクトップアプリ**です。GitHub のページを開いただけではブラウザ上では動きません。
+`docs/index.html` に、GitHub Pages 用の静的 Web 版を入れています。
 
-ブラウザで回したい場合は、別途 Web アプリ化（サーバー + フロント）が必要です。**名簿を公開サーバーに送らない**設計（ログイン・自分の端末だけで動かす等）を別プロジェクトで検討してください。
+- Python 不要
+- サーバー不要
+- iPad / スマホ / PC のブラウザで利用可能
+- 名簿と履歴はブラウザ内に保存（GitHub には送らない）
+
+### ローカルで試す
+
+`docs/index.html` をブラウザで開いてください。
+
+### GitHub Pages で公開する
+
+1. このリポジトリを GitHub に push する。
+2. GitHub のリポジトリ画面で **Settings** → **Pages** を開く。
+3. **Build and deployment** の Source を **Deploy from a branch** にする。
+4. Branch を **main**、フォルダを **/docs** にする。
+5. Save を押す。
+6. 数分後、表示された URL を iPad の Safari などで開く。
+
+### Web 版のデータについて
+
+Web 版はサーバーなしで動かすため、履歴は各ブラウザに保存されます。
+別端末に移したいときは、画面の **JSONを書き出す** → 別端末で **JSONを取り込む** を使ってください。
+
+全員で自動同期したい場合は、Google Sheets / Firebase / Notion などの保存先を追加する必要があります。
 
 ## GitHub に上げる例
 

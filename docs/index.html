@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ゴミ・掃除当番ルーレット</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #202124;
+      --muted: #667085;
+      --accent: #d9480f;
+      --accent-2: #2563eb;
+      --border: #d0d5dd;
+      --soft: #fff4e6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    header {
+      padding: 18px 20px 10px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 40px);
+    }
+
+    .note {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(280px, 380px);
+      gap: 16px;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+
+    section,
+    aside,
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+    }
+
+    .roulette-area {
+      padding: 16px;
+    }
+
+    canvas {
+      display: block;
+      width: min(100%, 680px);
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+    }
+
+    .winner {
+      min-height: 96px;
+      margin: 14px 0;
+      padding: 14px;
+      background: var(--soft);
+      border-radius: 14px;
+      color: #9a3412;
+      font-size: clamp(22px, 4vw, 36px);
+      font-weight: 800;
+      text-align: center;
+      white-space: pre-line;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    button,
+    .file-label {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      background: var(--accent-2);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    button.secondary,
+    .file-label {
+      background: #475467;
+    }
+
+    button.warning {
+      background: var(--accent);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    aside {
+      padding: 16px;
+    }
+
+    h2 {
+      margin: 4px 0 10px;
+      font-size: 20px;
+    }
+
+    h3 {
+      margin: 14px 0 8px;
+      font-size: 16px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      font: inherit;
+    }
+
+    .status,
+    .panel {
+      padding: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+    }
+
+    .check-list {
+      display: grid;
+      gap: 8px;
+      max-height: 180px;
+      overflow: auto;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .rank {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ゴミ・掃除当番ルーレット</h1>
+    <p class="note">GitHub Pagesで動くサーバーなし版です。名簿と履歴はこのブラウザ内に保存されます。</p>
+  </header>
+
+  <main>
+    <section class="roulette-area">
+      <canvas id="wheel" width="760" height="760" aria-label="ルーレット"></canvas>
+      <div id="winner" class="winner">名簿を保存して、抽選を始めてください。</div>
+      <div class="controls">
+        <button id="confirmBtn">除外を確定して抽選開始</button>
+        <button id="spinBtn" class="warning" disabled>回す</button>
+        <button id="resetSelectionBtn" class="secondary">除外を選び直す</button>
+      </div>
+    </section>
+
+    <aside>
+      <h2>設定</h2>
+      <div id="status" class="status"></div>
+
+      <h3>前回の確認</h3>
+      <div id="previousPanel" class="panel"></div>
+
+      <h3>名簿</h3>
+      <p class="note">1行に1人ずつ書いてください。</p>
+      <textarea id="membersInput" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="saveMembersBtn">名簿を保存</button>
+        <button id="resetCycleBtn" class="secondary">一周リセット</button>
+      </div>
+
+      <h3>今週ルーレットから除外</h3>
+      <div id="excludeList" class="check-list"></div>
+
+      <h3>危険度ランキング</h3>
+      <div id="ranking"></div>
+
+      <h3>履歴データ</h3>
+      <div class="row">
+        <button id="exportBtn">JSONを書き出す</button>
+        <label class="file-label" for="importFile">JSONを取り込む</label>
+        <input id="importFile" type="file" accept="application/json,.json">
+      </div>
+      <p class="note">別端末へ移すときは、JSONを書き出して相手の端末で取り込んでください。</p>
+    </aside>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "gomiRouletteWebState.v1";
+    const PENALTY_RATE = 10;
+    const ROLE_GOMI = "gomi";
+    const ROLE_SOUJI = "souji";
+    const COLORS = ["#ff9aa2", "#ffb7b2", "#ffdac1", "#e2f0cb", "#b5ead7", "#c7ceea", "#f8b195", "#f67280"];
+
+    const canvas = document.querySelector("#wheel");
+    const ctx = canvas.getContext("2d");
+    const winnerEl = document.querySelector("#winner");
+    const statusEl = document.querySelector("#status");
+    const previousPanel = document.querySelector("#previousPanel");
+    const membersInput = document.querySelector("#membersInput");
+    const excludeList = document.querySelector("#excludeList");
+    const rankingEl = document.querySelector("#ranking");
+    const confirmBtn = document.querySelector("#confirmBtn");
+    const spinBtn = document.querySelector("#spinBtn");
+    const resetSelectionBtn = document.querySelector("#resetSelectionBtn");
+    const saveMembersBtn = document.querySelector("#saveMembersBtn");
+    const resetCycleBtn = document.querySelector("#resetCycleBtn");
+    const exportBtn = document.querySelector("#exportBtn");
+    const importFile = document.querySelector("#importFile");
+
+    let state = loadState();
+    let confirmed = false;
+    let drawRole = ROLE_GOMI;
+    let sessionGomiWinner = null;
+    let excluded = new Set();
+    let answeredPrevious = new Set();
+    let angle = 0;
+    let spinning = false;
+
+    function defaultState() {
+      return {
+        members: ["山田太郎", "佐藤花子", "鈴木一郎"],
+        history: {
+          done_gomi: [],
+          done_souji: [],
+          last_gomi_winner: null,
+          last_souji_winner: null,
+          weights_gomi: {},
+          weights_souji: {},
+          pair_pending_souji: false,
+          pair_session_excluded: []
+        }
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaultState();
+        const parsed = JSON.parse(raw);
+        return normalizeState(parsed);
+      } catch {
+        return defaultState();
+      }
+    }
+
+    function normalizeState(input) {
+      const base = defaultState();
+      const members = Array.isArray(input.members) ? input.members.filter(Boolean) : base.members;
+      const history = { ...base.history, ...(input.history || input) };
+      history.done_gomi = Array.isArray(history.done_gomi) ? history.done_gomi : [];
+      history.done_souji = Array.isArray(history.done_souji) ? history.done_souji : [];
+      history.weights_gomi = history.weights_gomi || {};
+      history.weights_souji = history.weights_souji || {};
+      return { members, history };
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function roleLabel(role) {
+      return role === ROLE_GOMI ? "ゴミ捨て" : "掃除";
+    }
+
+    function roleWeights(role) {
+      return role === ROLE_GOMI ? state.history.weights_gomi : state.history.weights_souji;
+    }
+
+    function candidatePools() {
+      const done = new Set([...state.history.done_gomi, ...state.history.done_souji]);
+      const neither = state.members.filter((name) => !done.has(name));
+      return { gomi: neither, souji: neither };
+    }
+
+    function activePool(role = drawRole) {
+      const pools = candidatePools();
+      let pool = role === ROLE_GOMI ? pools.gomi : pools.souji;
+      pool = pool.filter((name) => !excluded.has(name));
+      if (role === ROLE_SOUJI && sessionGomiWinner) {
+        pool = pool.filter((name) => name !== sessionGomiWinner);
+      }
+      return pool;
+    }
+
+    function orderedPool(role = drawRole) {
+      const weights = roleWeights(role);
+      return activePool(role).slice().sort((a, b) => (weights[b] || 1) - (weights[a] || 1));
+    }
+
+    function totalWeight(names, role = drawRole) {
+      const weights = roleWeights(role);
+      return names.reduce((sum, name) => sum + (weights[name] || 1), 0);
+    }
+
+    function drawWheel() {
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = Math.min(w, h) / 2 - 28;
+      ctx.clearRect(0, 0, w, h);
+
+      const names = orderedPool();
+      if (!names.length) {
+        ctx.fillStyle = "#475467";
+        ctx.font = "bold 34px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("候補がいません", cx, cy);
+        return;
+      }
+
+      const weights = roleWeights(drawRole);
+      const total = totalWeight(names);
+      let start = 0;
+      names.forEach((name, index) => {
+        const part = ((weights[name] || 1) / total) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, start, start + part);
+        ctx.closePath();
+        ctx.fillStyle = COLORS[index % COLORS.length];
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        const mid = start + part / 2;
+        ctx.save();
+        ctx.translate(cx + Math.cos(mid) * r * 0.58, cy + Math.sin(mid) * r * 0.58);
+        ctx.rotate(mid);
+        ctx.fillStyle = "#202124";
+        ctx.font = "bold 24px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(name, 0, 0);
+        ctx.font = "18px sans-serif";
+        ctx.fillText(`x${(weights[name] || 1).toFixed(1)}`, 0, 28);
+        ctx.restore();
+        start += part;
+      });
+
+      const hand = angle - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(hand) * r * 0.72, cy + Math.sin(hand) * r * 0.72);
+      ctx.strokeStyle = "#111827";
+      ctx.lineWidth = 8;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.strokeStyle = "#111827";
+      ctx.stroke();
+    }
+
+    function pickWinner() {
+      const names = orderedPool();
+      const weights = roleWeights(drawRole);
+      const total = totalWeight(names);
+      let target = Math.random() * total;
+      for (const name of names) {
+        target -= weights[name] || 1;
+        if (target <= 0) return name;
+      }
+      return names[names.length - 1];
+    }
+
+    function canRunBothDraws() {
+      const gomi = activePool(ROLE_GOMI);
+      const souji = activePool(ROLE_SOUJI);
+      if (!gomi.length || !souji.length) return false;
+      return gomi.some((g) => souji.some((s) => s !== g));
+    }
+
+    function confirmExclusions() {
+      if (!canRunBothDraws()) {
+        alert("ゴミと掃除を両方決められる候補が足りません。除外を減らしてください。");
+        return;
+      }
+      confirmed = true;
+      drawRole = ROLE_GOMI;
+      sessionGomiWinner = null;
+      spinBtn.disabled = false;
+      confirmBtn.disabled = true;
+      winnerEl.textContent = "1回目：ゴミ捨て当番を抽選します。";
+      render();
+    }
+
+    function spin() {
+      if (!confirmed || spinning || !activePool().length) return;
+      spinning = true;
+      spinBtn.disabled = true;
+      let speed = 0.45 + Math.random() * 0.25;
+      let frames = 0;
+      const timer = setInterval(() => {
+        angle = (angle + speed) % (Math.PI * 2);
+        speed *= 0.985;
+        frames += 1;
+        drawWheel();
+        if (frames > 90 && speed < 0.08) {
+          clearInterval(timer);
+          spinning = false;
+          finishDraw();
+        }
+      }, 16);
+    }
+
+    function finishDraw() {
+      const winner = pickWinner();
+      const names = orderedPool();
+      const rate = ((roleWeights(drawRole)[winner] || 1) / totalWeight(names)) * 100;
+
+      if (drawRole === ROLE_GOMI) {
+        sessionGomiWinner = winner;
+        drawRole = ROLE_SOUJI;
+        winnerEl.textContent = `ゴミ捨て当番\n【 ${winner} 】さん\n続けて掃除当番を抽選します。`;
+        spinBtn.disabled = false;
+      } else {
+        applyExclusionBonus();
+        state.history.last_gomi_winner = sessionGomiWinner;
+        state.history.last_souji_winner = winner;
+        state.history.session_close_snapshot = {
+          saved_at: new Date().toISOString(),
+          done_gomi: [...state.history.done_gomi],
+          done_souji: [...state.history.done_souji],
+          this_week_gomi_winner: sessionGomiWinner,
+          this_week_souji_winner: winner
+        };
+        saveState();
+        winnerEl.textContent = `ゴミ捨て：【 ${sessionGomiWinner} 】さん\n掃除：【 ${winner} 】さん\n掃除の当選確率 ${rate.toFixed(1)}%`;
+        confirmed = false;
+        drawRole = ROLE_GOMI;
+        sessionGomiWinner = null;
+        excluded.clear();
+        confirmBtn.disabled = false;
+        spinBtn.disabled = true;
+      }
+      checkCycleReset(false);
+      render();
+    }
+
+    function applyExclusionBonus() {
+      [ROLE_GOMI, ROLE_SOUJI].forEach((role) => {
+        const pools = candidatePools();
+        const base = role === ROLE_GOMI ? pools.gomi : pools.souji;
+        const weights = roleWeights(role);
+        const total = base.reduce((sum, name) => sum + (weights[name] || 1), 0);
+        excluded.forEach((name) => {
+          const current = weights[name] || 1;
+          if (total > 0) weights[name] = current * (1 + current / total);
+        });
+      });
+    }
+
+    function answerPrevious(role, completed) {
+      const key = role === ROLE_GOMI ? "last_gomi_winner" : "last_souji_winner";
+      const doneKey = role === ROLE_GOMI ? "done_gomi" : "done_souji";
+      const last = state.history[key];
+      if (!last) return;
+      answeredPrevious.add(role);
+      if (completed) {
+        if (!state.history[doneKey].includes(last)) state.history[doneKey].push(last);
+      } else {
+        const weights = roleWeights(role);
+        weights[last] = (weights[last] || 1) * PENALTY_RATE;
+      }
+      saveState();
+      checkCycleReset(true);
+      render();
+    }
+
+    function checkCycleReset(showMessage) {
+      const memberSet = new Set(state.members);
+      const gDone = new Set(state.history.done_gomi);
+      const sDone = new Set(state.history.done_souji);
+      const complete = state.members.length && state.members.every((name) => gDone.has(name) && sDone.has(name));
+      if (!complete) return;
+      state.history.done_gomi = [];
+      state.history.done_souji = [];
+      state.history.last_gomi_winner = null;
+      state.history.last_souji_winner = null;
+      saveState();
+      if (showMessage) alert("全員一周完了しました。リストをリセットします。");
+    }
+
+    function renderPreviousPanel() {
+      const items = [
+        [ROLE_GOMI, state.history.last_gomi_winner, state.history.done_gomi],
+        [ROLE_SOUJI, state.history.last_souji_winner, state.history.done_souji]
+      ].filter(([role, name, done]) => name && !done.includes(name) && !answeredPrevious.has(role));
+
+      if (!items.length) {
+        previousPanel.textContent = "確認が必要な前回当番はありません。";
+        return;
+      }
+
+      previousPanel.innerHTML = "";
+      items.forEach(([role, name]) => {
+        const div = document.createElement("div");
+        div.innerHTML = `<strong>前回の${roleLabel(role)}：</strong>${escapeHtml(name)}さん`;
+        const row = document.createElement("div");
+        row.className = "row";
+        const yes = document.createElement("button");
+        yes.textContent = "完了";
+        yes.onclick = () => answerPrevious(role, true);
+        const no = document.createElement("button");
+        no.textContent = "未完了";
+        no.className = "warning";
+        no.onclick = () => answerPrevious(role, false);
+        row.append(yes, no);
+        div.append(row);
+        previousPanel.append(div);
+      });
+    }
+
+    function renderExcludeList() {
+      const pools = candidatePools();
+      const candidates = [...new Set([...pools.gomi, ...pools.souji])];
+      excludeList.innerHTML = "";
+      if (!candidates.length) {
+        excludeList.textContent = "候補がいません。前回確認か一周リセットをしてください。";
+        return;
+      }
+      candidates.forEach((name) => {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = excluded.has(name);
+        input.disabled = confirmed;
+        input.onchange = () => {
+          if (input.checked) excluded.add(name);
+          else excluded.delete(name);
+          render();
+        };
+        label.append(input, document.createTextNode(name));
+        excludeList.append(label);
+      });
+    }
+
+    function renderRanking() {
+      const blocks = [ROLE_GOMI, ROLE_SOUJI].map((role) => {
+        const weights = roleWeights(role);
+        const names = state.members.slice().sort((a, b) => (weights[b] || 1) - (weights[a] || 1));
+        const total = state.members.reduce((sum, name) => sum + (weights[name] || 1), 0);
+        const list = names.map((name) => {
+          const w = weights[name] || 1;
+          const p = total > 0 ? (w / total) * 100 : 0;
+          let status = "抽選対象";
+          if (excluded.has(name)) status = "今週除外";
+          else if (role === ROLE_SOUJI && sessionGomiWinner === name) status = "今回のゴミ当番";
+          else if (state.history.done_gomi.includes(name) || state.history.done_souji.includes(name)) status = "今周完了済み";
+          return `<li>${escapeHtml(name)}：倍率 ${w.toFixed(2)} / 全体目安 ${p.toFixed(1)}% / ${status}</li>`;
+        }).join("");
+        return `<strong>${roleLabel(role)}</strong><ol class="rank">${list || "<li>候補なし</li>"}</ol>`;
+      });
+      rankingEl.innerHTML = blocks.join("");
+    }
+
+    function renderStatus() {
+      const pools = candidatePools();
+      statusEl.textContent = `総メンバー：${state.members.length}人 / ゴミ残り：${pools.gomi.length} / 掃除残り：${pools.souji.length}`;
+    }
+
+    function render() {
+      membersInput.value = state.members.join("\n");
+      renderStatus();
+      renderPreviousPanel();
+      renderExcludeList();
+      renderRanking();
+      drawWheel();
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, (s) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[s]));
+    }
+
+    saveMembersBtn.onclick = () => {
+      const members = membersInput.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      if (members.length < 2) {
+        alert("メンバーは2人以上入れてください。");
+        return;
+      }
+      state.members = [...new Set(members)];
+      excluded.clear();
+      saveState();
+      render();
+    };
+
+    resetCycleBtn.onclick = () => {
+      if (!confirm("ゴミ・掃除の完了リストをリセットしますか？")) return;
+      state.history.done_gomi = [];
+      state.history.done_souji = [];
+      state.history.last_gomi_winner = null;
+      state.history.last_souji_winner = null;
+      answeredPrevious = new Set();
+      saveState();
+      render();
+    };
+
+    confirmBtn.onclick = confirmExclusions;
+    spinBtn.onclick = spin;
+    resetSelectionBtn.onclick = () => {
+      confirmed = false;
+      drawRole = ROLE_GOMI;
+      sessionGomiWinner = null;
+      excluded.clear();
+      confirmBtn.disabled = false;
+      spinBtn.disabled = true;
+      winnerEl.textContent = "除外を選び直しました。";
+      render();
+    };
+
+    exportBtn.onclick = () => {
+      const blob = new Blob([JSON.stringify(state.history, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "duty_history.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    importFile.onchange = async () => {
+      const file = importFile.files[0];
+      if (!file) return;
+      try {
+        const imported = JSON.parse(await file.text());
+        state = normalizeState({ members: state.members, history: imported });
+        saveState();
+        render();
+        alert("履歴JSONを取り込みました。");
+      } catch {
+        alert("JSONを読み込めませんでした。");
+      } finally {
+        importFile.value = "";
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>
