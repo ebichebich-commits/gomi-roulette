@@ -14,7 +14,7 @@
    - ひな形: `members.csv.example` → `members.csv` にコピー。
 2. 初回起動で **`duty_history.json`** が自動作成。
 
-### B. 別の非公開リポジトリに名簿・履歴を置く（推奨・同期楽）
+### B. 別の非公開リポジトリに名簿・履歴を置く（推奨・同期が楽）
 
 1. GitHub で **Private** リポジトリを作る（例: `gomi-roulette-data`）。
 2. 中身に **`members.csv`** と **`duty_history.json`** をコミット（このリポジトリは閉じたメンバーだけが clone できる）。
