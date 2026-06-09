@@ -29,6 +29,7 @@ PATHS_CONFIG_NAME = "roulette_paths.json"
 DEFAULT_MEMBERS = ["メンバーA", "メンバーB", "メンバーC", "メンバーD"]
 
 PENALTY_RATE = 10
+ROUND_CARRY_STEP = 1.0
 REPORT_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dQkSW-dIugdTNqJ4usAkveFnUkIfIhv-E9gh1wFX7O4/edit?usp=sharing"
 CLEANING_WIKI_URL = "https://www.hashimoto.lab.uec.ac.jp/intra/?%A5%B4%A5%DF%BC%CE%A4%C6%C5%F6%C8%D6"
 # ==========================================
@@ -48,18 +49,31 @@ SUPPORTED_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
 QUIZ_FILE_NAME = "quiz.txt"
 
 
-def compute_candidate_pools(all_members, done_gomi, done_souji):
+def active_penalty_members(weights):
+    """倍率が1より大きい人＝未実施ペナルティ（今週10倍 or 持ち越し+100%など）を持つ人。"""
+    return {m for m, w in (weights or {}).items() if w > 1.0}
+
+
+def compute_candidate_pools(all_members, done_gomi, done_souji, weights_gomi=None, weights_souji=None):
     """
     どちらか片方でも完了した人は、両方のルーレットから除外する。
-    - ゴミだけ完了  -> ゴミ/掃除どちらにも出ない
-    - 掃除だけ完了  -> ゴミ/掃除どちらにも出ない
-    - 両方完了      -> ゴミ/掃除どちらにも出ない
-    - 両方未完了    -> ゴミ/掃除どちらにも出る
+    ただし未実施ペナルティがある人は、その役割のルーレットに残す。
     """
     dg, ds = set(done_gomi), set(done_souji)
+    wg = weights_gomi or {}
+    ws = weights_souji or {}
+    active_gomi_penalty = active_penalty_members(wg)
+    active_souji_penalty = active_penalty_members(ws)
     neither = [m for m in all_members if m not in dg and m not in ds]
-    # ゴミ・掃除ともに「両方未完了」の人だけを候補にする
-    return list(neither), list(neither)
+
+    gomi_pool = list(neither)
+    souji_pool = list(neither)
+    for member in all_members:
+        if member in active_gomi_penalty and member not in gomi_pool:
+            gomi_pool.append(member)
+        if member in active_souji_penalty and member not in souji_pool:
+            souji_pool.append(member)
+    return gomi_pool, souji_pool
 
 
 def _read_paths_config():
@@ -235,6 +249,7 @@ class DutyRouletteApp:
         self.last_souji_winner = self.history_data.get("last_souji_winner", None)
         self.weights_gomi = self.history_data.setdefault("weights_gomi", {})
         self.weights_souji = self.history_data.setdefault("weights_souji", {})
+        self.previous_unfinished = set()
 
         # 3. 起動時：前回のゴミ・掃除それぞれ実施確認
         self.check_previous_duty_status(ROLE_GOMI)
@@ -245,7 +260,7 @@ class DutyRouletteApp:
 
         # 5. 役割ごとの候補（片方完了者はもう片方のルーレットからも消す）
         self.candidates_gomi, self.candidates_souji = compute_candidate_pools(
-            self.all_members, self.done_gomi, self.done_souji
+            self.all_members, self.done_gomi, self.done_souji, self.weights_gomi, self.weights_souji
         )
         # 除外リスト用（どちらかの役まだ残っている人）
         self.candidates = sorted(
@@ -406,7 +421,18 @@ class DutyRouletteApp:
         self.root.bind('<Escape>', lambda e: self.root.destroy())
 
     def role_weights(self, role):
-        return self.weights_gomi if role == ROLE_GOMI else self.weights_souji
+        primary = self.weights_gomi if role == ROLE_GOMI else self.weights_souji
+        secondary = self.weights_souji if role == ROLE_GOMI else self.weights_gomi
+        secondary_role = ROLE_SOUJI if role == ROLE_GOMI else ROLE_GOMI
+        merged = dict(primary)
+        for member, weight in secondary.items():
+            # 10倍は「未実施だった役割」だけ。
+            # 2倍・3倍などの持ち越し分、または「10倍+持ち越し分」は両方のルーレットに効かせる。
+            if 1.0 < weight < PENALTY_RATE or (
+                weight > PENALTY_RATE and (secondary_role, member) in self.previous_unfinished
+            ):
+                merged[member] = max(merged.get(member, 1.0), weight)
+        return merged
 
     def role_candidates(self, role):
         return self.candidates_gomi if role == ROLE_GOMI else self.candidates_souji
@@ -539,22 +565,29 @@ class DutyRouletteApp:
         """テキスト用：全メンバーの倍率ランキング。状態も併記する。"""
         lines = []
         wmap = self.role_weights(role)
+        role_pool = set(self.role_candidates(role))
         sorted_members = sorted(self.all_members, key=lambda m: wmap.get(m, 1.0), reverse=True)
-        total_weight = sum(wmap.get(m, 1.0) for m in self.all_members)
+        pool_total = sum(wmap.get(m, 1.0) for m in role_pool)
         for i, member in enumerate(sorted_members):
             w = wmap.get(member, 1.0)
-            prob = (w / total_weight) * 100 if total_weight > 0 else 0
+            prob = (w / pool_total) * 100 if member in role_pool and pool_total > 0 else 0
             rank_icon = "👑" if i == 0 else f"{i+1}."
             if member in self.weekly_excluded:
                 status = "今週除外"
             elif member in exclude_names:
                 status = "今回のゴミ当番"
+            elif member not in role_pool:
+                other = "掃除" if role == ROLE_GOMI else "ゴミ"
+                status = f"{other}ペナルティ対象"
             elif member in self.done_gomi or member in self.done_souji:
                 status = "今周完了済み"
             else:
                 status = "抽選対象"
             lines.append(f"{rank_icon} {member}\n")
-            lines.append(f"    倍率: {w:.2f}倍 / 全体目安: {prob:.1f}% / {status}\n\n")
+            if member in role_pool:
+                lines.append(f"    倍率: {w:.2f}倍 / 当番目安: {prob:.1f}% / {status}\n\n")
+            else:
+                lines.append(f"    倍率: {w:.2f}倍 / 当番目安: - / {status}\n\n")
         return "".join(lines)
 
     def update_ranking_display(self):
@@ -652,7 +685,7 @@ class DutyRouletteApp:
             self.weekly_quiz_answer = a_r
 
         if not target_dir:
-            self.weekly_side_title.config(text="今週の1枚！！", fg="#222222")
+            self.weekly_side_title.config(text="今週の1枚！", fg="#222222")
             self.weekly_photo_canvas.delete("all")
             self.weekly_photo_canvas.create_text(
                 canvas_w // 2, canvas_h // 2,
@@ -705,7 +738,7 @@ class DutyRouletteApp:
                 hint = "答えは今週の抽選がすべて終わったあとに表示します。" if a_r else "（答え行なし：quiz.txt の2行目以降）"
                 self.weekly_photo_path_label.config(text=hint)
             else:
-                self.weekly_side_title.config(text="今週の1枚！！", fg="#222222")
+                self.weekly_side_title.config(text="今週の1枚！", fg="#222222")
                 self.weekly_photo_canvas.create_text(
                     canvas_w // 2, canvas_h // 2,
                     text=f"画像がありません\n{target_dir}",
@@ -719,7 +752,7 @@ class DutyRouletteApp:
         if q_r:
             self.weekly_side_title.config(text="今週のクイズ！！", fg="#d00000")
         else:
-            self.weekly_side_title.config(text="今週の1枚！！", fg="#222222")
+            self.weekly_side_title.config(text="今週の1枚！", fg="#222222")
         chosen = random.choice(files)
         try:
             if q_r:
@@ -782,7 +815,7 @@ class DutyRouletteApp:
                 self.weekly_photo_path_label.config(text=f"{os.path.basename(chosen)} / {hint}")
             else:
                 self.weekly_photo_canvas.create_image(canvas_w // 2, canvas_h // 2, image=self.weekly_photo_tk)
-                self.weekly_photo_path_label.config(text=os.path.basename(chosen))
+                self.weekly_photo_path_label.config(text=os.path.splitext(os.path.basename(chosen))[0])
         except Exception:
             self.weekly_photo_tk = None
             self.weekly_photo_canvas.delete("all")
@@ -798,19 +831,53 @@ class DutyRouletteApp:
         """
         ゴミ・掃除の両抽選が終わったあと、画面下にタブ風の案内を出す。
         「進」で大きく答えを表示する。
-        クイズが無い週はここで JSON にまとめて保存する。
+        クイズが無い週は最後の OK で JSON 保存と連絡文作成を行う。
         """
         self._resync_weekly_quiz_from_disk()
         if not self.weekly_quiz_answer or not self.weekly_quiz_question:
-            self.persist_session_end_to_disk()
+            self.root.after(120, self._open_no_quiz_final_popup)
             return
         # 当選ダイアログの grab 解除直後は前面に出しにくいので少し遅らせる
         self.root.after(120, self._open_quiz_tab_popup)
 
+    def _open_no_quiz_final_popup(self):
+        tab = tk.Toplevel(self.root)
+        tab.title("保存")
+        tab.transient(self.root)
+        tab.resizable(False, False)
+        tab.attributes("-topmost", True)
+
+        tk.Label(
+            tab,
+            text="今週の当番を保存します。",
+            font=("Meiryo", 16, "bold"),
+            padx=28,
+            pady=18,
+        ).pack()
+        tk.Label(
+            tab,
+            text="OKを押すと履歴と連絡文を保存して終了します。",
+            font=("Meiryo", 12),
+            padx=28,
+        ).pack(pady=(0, 16))
+
+        def on_ok():
+            tab.destroy()
+            self.persist_session_end_to_disk()
+            self.root.destroy()
+
+        tk.Button(tab, text="OK", font=("Meiryo", 14), width=12, command=on_ok).pack(pady=(0, 20))
+
+        self.root.update_idletasks()
+        tab.update_idletasks()
+        w, h = tab.winfo_reqwidth(), tab.winfo_reqheight()
+        sw, sh = tab.winfo_screenwidth(), tab.winfo_screenheight()
+        tab.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+
     def _open_quiz_tab_popup(self):
         self._resync_weekly_quiz_from_disk()
         if not self.weekly_quiz_answer or not self.weekly_quiz_question:
-            self.persist_session_end_to_disk()
+            self._open_no_quiz_final_popup()
             return
 
         tab = tk.Toplevel(self.root)
@@ -1131,37 +1198,91 @@ class DutyRouletteApp:
                 self.done_gomi.append(last)
             else:
                 self.done_souji.append(last)
+            wmap.pop(last, None)
             messagebox.showinfo("確認", f"{duty_name}当番を完了リストに加えました。")
         else:
-            current_weight = wmap.get(last, 1.0)
-            wmap[last] = current_weight * PENALTY_RATE
+            new_weight = max(wmap.get(last, 1.0), PENALTY_RATE)
+            wmap[last] = new_weight
+            self.previous_unfinished.add((role, last))
             messagebox.showwarning(
                 "未完了",
-                f"{last}さんの{duty_name}当番：当選確率が{(PENALTY_RATE-1)*100}%アップ！！",
+                f"{last}さんの{duty_name}当番：今週の当選倍率を{PENALTY_RATE}倍にします。\n"
+                "次の周に入るときは、持ち越し分として+100%に変換します。",
             )
 
         # 先週の回答はメモリのみ。JSON 保存はクイズ OK 後（またはクイズなしで抽選終了時）にまとめて行う。
 
+    def assigned_members_in_current_round(self):
+        """完了済み + 前回当選者を、今の周で一度は割り当てられた人として数える。"""
+        assigned = set(self.done_gomi) | set(self.done_souji)
+        if self.last_gomi_winner:
+            assigned.add(self.last_gomi_winner)
+        if self.last_souji_winner:
+            assigned.add(self.last_souji_winner)
+        return assigned
+
+    def _carry_only_unfinished_penalties(self):
+        """新しい周には、未実施者の倍率だけ持ち越す。完了済みの古い倍率は消す。"""
+        done_gomi = set(self.done_gomi)
+        done_souji = set(self.done_souji)
+        member_set = set(self.all_members)
+
+        def carry_weight(role, member, weight, done_set):
+            if member not in member_set:
+                return None
+            if (role, member) in self.previous_unfinished:
+                # 片方だけ未実施で次の周へ進む場合は、10倍に今回分の+100%を足して残す。
+                return max(weight, PENALTY_RATE) + ROUND_CARRY_STEP
+            # 古い10倍ペナルティは、次の周に進むとき未実施1回につき+100%へ戻して持ち越す。
+            if weight >= PENALTY_RATE:
+                base_weight = weight - (PENALTY_RATE - 1)
+                return base_weight + ROUND_CARRY_STEP
+            if member in done_set:
+                return None
+            return weight
+
+        self.weights_gomi = {
+            member: carried
+            for member, weight in self.weights_gomi.items()
+            for carried in [carry_weight(ROLE_GOMI, member, weight, done_gomi)]
+            if carried is not None
+        }
+        self.weights_souji = {
+            member: carried
+            for member, weight in self.weights_souji.items()
+            for carried in [carry_weight(ROLE_SOUJI, member, weight, done_souji)]
+            if carried is not None
+        }
+        self.history_data["weights_gomi"] = self.weights_gomi
+        self.history_data["weights_souji"] = self.weights_souji
+
     def check_cycle_reset(self):
         member_set = set(self.all_members)
-        g_done = set(self.done_gomi)
-        s_done = set(self.done_souji)
 
-        if member_set.issubset(g_done) and member_set.issubset(s_done) and len(member_set) > 0:
+        if member_set.issubset(self.assigned_members_in_current_round()) and len(member_set) > 0:
+            if self.last_gomi_winner and self.last_souji_winner and len(self.previous_unfinished) >= 2:
+                messagebox.showinfo(
+                    "未実施あり",
+                    "前回のゴミ捨て・掃除がどちらも未実施でした。\n"
+                    "2人を残して、今の周のまま続けます。",
+                )
+                return
+            self._carry_only_unfinished_penalties()
             messagebox.showinfo(
                 "祝！一周完了",
-                "全員のゴミ捨て・掃除当番が終了しました！\nリストをリセットして、新しい周を開始します。",
+                "全員が一度ずつ当番に割り当てられました！\n"
+                "前回分の確認を反映して、新しい周を開始します。\n"
+                "未実施の当番がある人は、倍率アップのまま次のルーレットに残ります。",
             )
             self.done_gomi = []
             self.done_souji = []
             self.history_data["done_gomi"] = self.done_gomi
             self.history_data["done_souji"] = self.done_souji
-            self.last_gomi_winner = None
-            self.last_souji_winner = None
+            self.last_gomi_winner = ""
+            self.last_souji_winner = ""
             self.history_data["pair_pending_souji"] = False
             self.history_data["pair_session_excluded"] = []
-            # 全員一周完了のリセットは次回起動ループ防止のため即保存（先週回答の遅延保存とは別）
-            self.save_data()
+            # ここでは保存しない。保存はクイズ答えの OK、またはクイズなし週の最後の OK で行う。
 
     def draw_wheel(self):
         self.canvas.delete("all")
@@ -1317,6 +1438,7 @@ class DutyRouletteApp:
             self.draw_role = ROLE_SOUJI
             self.refresh_info_spin_hint()
             self.update_ranking_display()
+            self.draw_wheel()
         else:
             self._apply_weekly_exclusion_bonus()
             self.last_gomi_winner = self.session_gomi_winner
@@ -1340,7 +1462,7 @@ class DutyRouletteApp:
             self.open_quiz_answer_tab_after_full_session()
 
         self.candidates_gomi, self.candidates_souji = compute_candidate_pools(
-            self.all_members, self.done_gomi, self.done_souji
+            self.all_members, self.done_gomi, self.done_souji, self.weights_gomi, self.weights_souji
         )
         self.candidates = sorted(
             set(self.candidates_gomi) | set(self.candidates_souji),
