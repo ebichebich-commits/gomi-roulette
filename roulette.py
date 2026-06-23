@@ -47,6 +47,7 @@ PHOTO_DIR_CANDIDATES = (
 SUPPORTED_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
 # 日付フォルダ内に画像が無いとき、同じフォルダの quiz.txt でクイズ表示（1行目=問題、2行目以降=答え）
 QUIZ_FILE_NAME = "quiz.txt"
+QUIZ_ANSWER_IMAGE_NAMES = ("quiz-answer.png", "quiz-answer.jpg", "quiz-answer.jpeg", "quiz-answer.gif")
 
 
 def active_penalty_members(weights):
@@ -139,11 +140,15 @@ def _parse_date_folder_to_ymd(name):
         return None
 
 
-def resolve_pictures_root():
-    for p in PHOTO_DIR_CANDIDATES:
+def resolve_pictures_root(data_dir=None):
+    candidates = []
+    if data_dir:
+        candidates.append(os.path.join(data_dir, "Pictures"))
+    candidates.extend(PHOTO_DIR_CANDIDATES)
+    for p in candidates:
         if os.path.isdir(p):
             return p
-    return PHOTO_DIR_CANDIDATES[0]
+    return candidates[0]
 
 
 def _read_weekly_quiz(target_dir):
@@ -173,6 +178,16 @@ def _read_weekly_quiz(target_dir):
         q = "\n".join(lines[:answer_start]).strip()
         a = "\n".join(lines[answer_start:]).strip()
     return q, (a if a else None)
+
+
+def _find_quiz_answer_image(target_dir):
+    if not target_dir:
+        return None
+    for name in QUIZ_ANSWER_IMAGE_NAMES:
+        p = os.path.join(target_dir, name)
+        if os.path.isfile(p):
+            return p
+    return None
 
 
 def sync_private_data_repo(data_dir):
@@ -213,8 +228,9 @@ class DutyRouletteApp:
         self.data_dir = resolve_data_directory()
         self.csv_path = os.path.join(self.data_dir, CSV_FILE)
         self.data_path = os.path.join(self.data_dir, DATA_FILE)
-        self.pictures_root = resolve_pictures_root()
+        self.pictures_root = resolve_pictures_root(self.data_dir)
         self.weekly_photo_tk = None
+        self.quiz_answer_photo_tk = None
         self.weekly_quiz_question = None
         self.weekly_quiz_answer = None
 
@@ -651,6 +667,8 @@ class DutyRouletteApp:
         for name in sorted(os.listdir(target_dir)):
             p = os.path.join(target_dir, name)
             ext = os.path.splitext(name)[1].lower()
+            if name.lower() in QUIZ_ANSWER_IMAGE_NAMES:
+                continue
             if os.path.isfile(p) and ext in SUPPORTED_IMAGE_EXTS:
                 files.append(p)
         return target_dir, files
@@ -951,6 +969,35 @@ class DutyRouletteApp:
             bg="#1a1a2e",
         ).pack(pady=(48, 16))
 
+        target_dir, _files = self._list_weekly_photo_candidates()
+        answer_image_path = _find_quiz_answer_image(target_dir)
+        if answer_image_path:
+            try:
+                max_w = max(big.winfo_screenwidth() - 160, 400)
+                max_h = max(big.winfo_screenheight() // 2, 260)
+                if Image is not None and ImageTk is not None:
+                    pil_img = Image.open(answer_image_path)
+                    pil_img.thumbnail((max_w, max_h))
+                    self.quiz_answer_photo_tk = ImageTk.PhotoImage(pil_img)
+                else:
+                    img = tk.PhotoImage(file=answer_image_path)
+                    source_w = max(img.width(), 1)
+                    source_h = max(img.height(), 1)
+                    ratio = min(max_w / source_w, max_h / source_h, 1.0)
+                    scaled = img
+                    if ratio < 1.0:
+                        step = max(int(1 / ratio), 1)
+                        scaled = img.subsample(step, step)
+                    self.quiz_answer_photo_tk = scaled
+
+                tk.Label(
+                    big,
+                    image=self.quiz_answer_photo_tk,
+                    bg="#1a1a2e",
+                ).pack(pady=(0, 16))
+            except Exception:
+                self.quiz_answer_photo_tk = None
+
         ans = self.weekly_quiz_answer
         wrap = max(big.winfo_screenwidth() - 120, 400)
         tk.Label(
@@ -961,7 +1008,7 @@ class DutyRouletteApp:
             bg="#1a1a2e",
             wraplength=wrap,
             justify=tk.CENTER,
-        ).pack(expand=True, fill=tk.BOTH, padx=40, pady=20)
+        ).pack(expand=True, fill=tk.BOTH, padx=40, pady=(0, 20))
 
         def on_ok():
             try:
