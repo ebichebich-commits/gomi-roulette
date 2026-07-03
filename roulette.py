@@ -1184,6 +1184,32 @@ class DutyRouletteApp:
 
         self.root.wait_window(dlg)
 
+    def show_praise_dialog(self, member, action_text):
+        """追加お手伝いをした人向けの「えらい！！」表示。"""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("えらい！！")
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        praise_f = ("Meiryo", 52, "bold")
+        name_f = ("Meiryo", 30, "bold")
+        sub_f = ("Meiryo", 20)
+        btn_f = ("Meiryo", 17)
+
+        tk.Label(dlg, text="えらい！！", font=praise_f, fg="#e67e22").pack(padx=48, pady=(36, 16))
+        tk.Label(dlg, text=f"【 {member} 】さん", font=name_f, fg="#c0392b").pack(padx=48, pady=8)
+        tk.Label(dlg, text=action_text, font=sub_f).pack(padx=48, pady=(8, 28))
+        tk.Button(dlg, text="OK", font=btn_f, width=14, command=dlg.destroy).pack(pady=(0, 32))
+
+        self.root.update_idletasks()
+        dlg.update_idletasks()
+        w, h = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        dlg.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+
+        self.root.wait_window(dlg)
+
     def check_previous_duty_status(self, role):
         last = self.last_gomi_winner if role == ROLE_GOMI else self.last_souji_winner
         done_list = self.done_gomi if role == ROLE_GOMI else self.done_souji
@@ -1191,6 +1217,7 @@ class DutyRouletteApp:
             return
 
         duty_name = "ゴミ捨て" if role == ROLE_GOMI else "掃除"
+        extra_label = "ゴミ袋を替えた" if role == ROLE_GOMI else "掃除機の中身を捨てた"
         dlg = tk.Toplevel(self.root)
         dlg.title(f"前回の確認（{duty_name}）")
         dlg.resizable(False, False)
@@ -1200,11 +1227,15 @@ class DutyRouletteApp:
         result = [None]
 
         def finish_yes():
-            result[0] = True
+            result[0] = "yes"
             dlg.destroy()
 
         def finish_no():
-            result[0] = False
+            result[0] = "no"
+            dlg.destroy()
+
+        def finish_extra():
+            result[0] = "extra"
             dlg.destroy()
 
         big = ("Meiryo", 20)
@@ -1223,9 +1254,13 @@ class DutyRouletteApp:
         ).pack(padx=24, pady=(0, 24))
 
         bf = tk.Frame(dlg)
-        bf.pack(pady=(0, 24))
+        bf.pack(pady=(0, 12))
         tk.Button(bf, text="はい（完了した）", font=btn_font, width=16, command=finish_yes).pack(side=tk.LEFT, padx=8)
         tk.Button(bf, text="いいえ（まだ）", font=btn_font, width=16, command=finish_no).pack(side=tk.LEFT, padx=8)
+
+        bf_extra = tk.Frame(dlg)
+        bf_extra.pack(pady=(0, 24))
+        tk.Button(bf_extra, text=extra_label, font=btn_font, width=28, command=finish_extra).pack()
 
         self.root.update_idletasks()
         dlg.update_idletasks()
@@ -1240,13 +1275,20 @@ class DutyRouletteApp:
 
         wmap = self.weights_gomi if role == ROLE_GOMI else self.weights_souji
 
-        if result[0]:
+        if result[0] == "yes":
             if role == ROLE_GOMI:
                 self.done_gomi.append(last)
             else:
                 self.done_souji.append(last)
             wmap.pop(last, None)
             messagebox.showinfo("確認", f"{duty_name}当番を完了リストに加えました。")
+        elif result[0] == "extra":
+            if role == ROLE_GOMI:
+                self.done_gomi.append(last)
+            else:
+                self.done_souji.append(last)
+            wmap.pop(last, None)
+            self.show_praise_dialog(last, extra_label)
         else:
             new_weight = max(wmap.get(last, 1.0), PENALTY_RATE)
             wmap[last] = new_weight
