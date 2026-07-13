@@ -13,6 +13,29 @@ except ImportError:
     Image = None
     ImageTk = None
 
+
+def _pil_resample():
+    if Image is None:
+        return None
+    return getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.LANCZOS)
+
+
+def _fit_pil_image_max_width(pil_img, max_w, max_h):
+    """横幅をスペース内で最大化。はみ出す高さは中央でクロップ。"""
+    max_w = max(int(max_w), 1)
+    max_h = max(int(max_h), 1)
+    src_w, src_h = pil_img.size
+    if src_w < 1 or src_h < 1:
+        return pil_img
+    scale = max_w / src_w
+    new_w = max_w
+    new_h = max(1, int(round(src_h * scale)))
+    resized = pil_img.resize((new_w, new_h), _pil_resample())
+    if new_h <= max_h:
+        return resized
+    top = (new_h - max_h) // 2
+    return resized.crop((0, top, new_w, top + max_h))
+
 # ==========================================
 # 設定エリア
 # ==========================================
@@ -309,25 +332,29 @@ class DutyRouletteApp:
             bg="#efefef",
             fg="#222222",
         )
-        self.weekly_side_title.pack(pady=(18, 10))
+        self.weekly_side_title.pack(pady=(12, 6))
         self.weekly_photo_canvas = tk.Canvas(
             self.photo_panel,
             bg="#e8e8e8",
-            width=390,
-            height=500,
+            width=400,
+            height=560,
             highlightthickness=0,
         )
-        self.weekly_photo_canvas.pack(padx=14, pady=(0, 8))
+        # パネル内で縦横を使い切る（余白を最小化して横幅最大化）
+        self.weekly_photo_canvas.pack(padx=6, pady=(0, 4), fill=tk.BOTH, expand=True)
         self.weekly_photo_path_label = tk.Label(
             self.photo_panel,
             text="",
             font=("Meiryo", 11),
             bg="#efefef",
             fg="#666666",
-            wraplength=380,
+            wraplength=400,
             justify=tk.CENTER,
         )
-        self.weekly_photo_path_label.pack(padx=8, pady=(0, 10))
+        self.weekly_photo_path_label.pack(padx=6, pady=(0, 8))
+        self.weekly_photo_chosen = None
+        self._weekly_photo_canvas_size = (0, 0)
+        self.weekly_photo_canvas.bind("<Configure>", self._on_weekly_photo_canvas_configure)
 
         self.center_frame = tk.Frame(self.left_frame, bg="white")
         self.center_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -688,10 +715,20 @@ class DutyRouletteApp:
             self.weekly_quiz_question = None
             self.weekly_quiz_answer = None
 
+    def _on_weekly_photo_canvas_configure(self, event):
+        w, h = event.width, event.height
+        if w < 40 or h < 40:
+            return
+        prev = self._weekly_photo_canvas_size
+        if abs(prev[0] - w) < 2 and abs(prev[1] - h) < 2:
+            return
+        self._weekly_photo_canvas_size = (w, h)
+        self.load_weekly_photo()
+
     def load_weekly_photo(self):
         target_dir, files = self._list_weekly_photo_candidates()
-        canvas_w = max(self.weekly_photo_canvas.winfo_width(), 390)
-        canvas_h = max(self.weekly_photo_canvas.winfo_height(), 500)
+        canvas_w = max(self.weekly_photo_canvas.winfo_width(), 400)
+        canvas_h = max(self.weekly_photo_canvas.winfo_height(), 560)
         self.weekly_quiz_question = None
         self.weekly_quiz_answer = None
 
@@ -713,14 +750,15 @@ class DutyRouletteApp:
             )
             self.weekly_photo_path_label.config(text="")
             self.weekly_photo_tk = None
+            self.weekly_photo_chosen = None
             return
         if not files:
             self.weekly_photo_canvas.delete("all")
             self.weekly_photo_tk = None
+            self.weekly_photo_chosen = None
             if q_r:
                 self.weekly_side_title.config(text="今週のクイズ！！", fg="#d00000")
                 bubble_pad_x = 18
-                bubble_pad_y = 26
                 bubble_left = bubble_pad_x
                 bubble_top = 34
                 bubble_right = canvas_w - bubble_pad_x
@@ -766,27 +804,31 @@ class DutyRouletteApp:
                 self.weekly_photo_path_label.config(text="")
             return
 
-        # 複数枚ある場合はランダムで1枚を表示（毎回起動時に変わる）
+        # 複数枚ある場合はランダムで1枚を表示（起動時に一度だけ選ぶ）
         if q_r:
             self.weekly_side_title.config(text="今週のクイズ！！", fg="#d00000")
         else:
             self.weekly_side_title.config(text="今週の1枚！", fg="#222222")
-        chosen = random.choice(files)
+        if self.weekly_photo_chosen not in files:
+            self.weekly_photo_chosen = random.choice(files)
+        chosen = self.weekly_photo_chosen
         try:
             if q_r:
-                max_w = max(canvas_w - 24, 100)
-                max_h = max(canvas_h - 300, 120)
-            else:
+                # クイズ吹き出し分を除き、残り領域の横幅いっぱいに写真
                 max_w = max(canvas_w - 8, 100)
-                max_h = max(canvas_h - 8, 120)
+                max_h = max(canvas_h - 220, 140)
+            else:
+                max_w = max(canvas_w - 4, 100)
+                max_h = max(canvas_h - 4, 120)
             if Image is not None and ImageTk is not None:
                 pil_img = Image.open(chosen)
-                pil_img.thumbnail((max_w, max_h))
+                pil_img = _fit_pil_image_max_width(pil_img, max_w, max_h)
                 self.weekly_photo_tk = ImageTk.PhotoImage(pil_img)
             else:
                 img = tk.PhotoImage(file=chosen)
                 source_w = max(img.width(), 1)
                 source_h = max(img.height(), 1)
+                # PhotoImage は拡大が弱いので、横幅に合わせた縮小のみ
                 ratio = min(max_w / source_w, max_h / source_h, 1.0)
                 scaled = img
                 if ratio < 1.0:
@@ -795,12 +837,12 @@ class DutyRouletteApp:
                 self.weekly_photo_tk = scaled
             self.weekly_photo_canvas.delete("all")
             if q_r:
-                image_y = canvas_h - max_h // 2 - 16
+                image_y = canvas_h - max_h // 2 - 8
                 self.weekly_photo_canvas.create_image(canvas_w // 2, image_y, image=self.weekly_photo_tk)
-                bubble_left = 18
-                bubble_top = 16
-                bubble_right = canvas_w - 18
-                bubble_bottom = 268
+                bubble_left = 12
+                bubble_top = 12
+                bubble_right = canvas_w - 12
+                bubble_bottom = max(canvas_h - max_h - 36, 160)
                 self.weekly_photo_canvas.create_rectangle(
                     bubble_left,
                     bubble_top,
@@ -827,7 +869,7 @@ class DutyRouletteApp:
                     font=("Meiryo", 16, "bold"),
                     fill="#222222",
                     justify=tk.CENTER,
-                    width=max(canvas_w - 48, 160),
+                    width=max(canvas_w - 40, 160),
                 )
                 hint = "答えは今週の抽選がすべて終わったあとに表示します。" if a_r else "（答え行なし：quiz.txt の2行目以降）"
                 self.weekly_photo_path_label.config(text=f"{os.path.basename(chosen)} / {hint}")
