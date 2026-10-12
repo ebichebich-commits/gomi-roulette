@@ -121,10 +121,23 @@
   #status { font-size: 11px; opacity: .8; text-align: center; flex: 0 0 auto; }
   #winner {
     min-height: 0; width: 100%; text-align: center; white-space: pre-line; font-weight: 900;
-    font-size: clamp(14px, 1.6vw, 22px); padding: 4px 8px; border-radius: 10px;
-    color: #ffe9a0; text-shadow: 0 0 14px rgba(255, 60, 60, .95), 0 2px 0 #5a0010;
+    font-size: clamp(15px, 1.7vw, 24px); padding: 6px 10px; border-radius: 10px;
+    color: #fff6c0; text-shadow: 0 0 14px rgba(255, 200, 0, .85), 0 2px 0 #5a0010;
     background: linear-gradient(180deg, rgba(120, 0, 20, .65), rgba(40, 0, 20, .65));
     border: 1px solid rgba(255, 210, 0, .5); flex: 0 0 auto;
+  }
+  #winner .gold-name, .modal .gold-name {
+    display: inline-block;
+    font-weight: 900;
+    font-size: 1.25em;
+    background: linear-gradient(180deg, #fffef0 0%, #ffe27a 28%, #ffd000 48%, #b8860b 58%, #fff3a8 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 2px 0 #5a0010) drop-shadow(0 0 12px rgba(255, 210, 0, .95));
+    -webkit-text-stroke: 0.5px rgba(90, 0, 16, .35);
+  }
+  .modal.fx-win .gold-name {
+    font-size: clamp(44px, 11vw, 80px);
+    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 20px rgba(255, 210, 0, 1));
   }
 
   button {
@@ -422,15 +435,15 @@
   </section>
 
   <aside class="panel">
-    <h2>今週ルーレットから除外</h2>
-    <div class="small" style="text-align:center">チェックした人はゴミ・掃除の両方から外れます</div>
+    <h2>今週の免除（達成済み扱い）</h2>
+    <div class="small" style="text-align:center">チェックした人は今週達成済み扱い（次周まで免除）</div>
     <div id="excludeList" style="margin-top:10px"></div>
     <div class="row">
-      <button id="confirmBtn">除外を確定する（この内容で抽選）</button>
+      <button id="confirmBtn">免除を確定する（この内容で抽選）</button>
     </div>
     <div class="row">
       <button id="cancelBtn" class="dark" disabled>確定を取り消す（選び直し）</button>
-      <button id="clearBtn" class="dark">除外をすべて解除</button>
+      <button id="clearBtn" class="dark">免除チェックを解除</button>
     </div>
     <div class="row"><button id="pullBtn" class="dark">データを更新（git pull）</button></div>
     <h2 class="rank-title">全体危険度ランキング</h2>
@@ -566,6 +579,7 @@
   let prevUnfinished = new Set();
   let candG = [], candS = [], candidates = [];
   let weeklyExcluded = new Set();
+  let weekExemptDone = new Set(); // 今週免除＝達成済み扱い
   let confirmed = false, drawRole = ROLE_GOMI, sessionG = null;
   let angle = 0, speed = 0, spinning = false, stopping = false;
   let busy = true, finished = false, weekly = null;
@@ -605,6 +619,12 @@
       wS[name] = Math.max(wS[name] ?? 1, mul);
     }
   }
+  function markExemptDone(name) {
+    weekExemptDone.add(name);
+    weeklyExcluded.add(name); // ルーレット枠からも外す
+    if (!doneGomi.includes(name)) doneGomi.push(name);
+    if (!doneSouji.includes(name)) doneSouji.push(name);
+  }
   function applyThisWeekExemptions() {
     const onWheel = new Set(THIS_WEEK_SLOTS);
     const applied = [], leftover = [];
@@ -614,7 +634,7 @@
       if (seen.has(k)) continue;
       seen.add(k);
       if (onWheel.has(e.name)) {
-        weeklyExcluded.add(e.name);
+        markExemptDone(e.name);
         applied.push(e);
       } else leftover.push(e);
     }
@@ -783,6 +803,7 @@
       const target = role === ROLE_GOMI ? wG : wS;
       const total = base.reduce((s, m) => s + (wm[m] ?? 1), 0);
       weeklyExcluded.forEach(m => {
+        if (weekExemptDone.has(m)) return; // 達成済み免除は倍率ボーナスなし
         const w = wm[m] ?? 1;
         if (total > 0) target[m] = (target[m] ?? 1) * (1 + w / total);
       });
@@ -804,12 +825,13 @@
       const prob = pool.has(m) && total > 0 ? (w / total) * 100 : 0;
       const bar = Math.max(4, Math.round((w / maxW) * 100));
       let st;
-      if (weeklyExcluded.has(m)) st = "今週除外";
+      if (weekExemptDone.has(m)) st = "今週達成済み（免除）";
+      else if (weeklyExcluded.has(m)) st = "今週免除";
       else if (exclude.has(m)) st = "今回のゴミ当番";
       else if (!pool.has(m)) st = (role === ROLE_GOMI ? "掃除" : "ゴミ") + "対象外";
       else if (doneGomi.includes(m) || doneSouji.includes(m)) st = "今周完了済み";
       else st = "抽選対象";
-      const dim = !pool.has(m) || weeklyExcluded.has(m);
+      const dim = !pool.has(m) || weeklyExcluded.has(m) || weekExemptDone.has(m);
       out += `<div class="rank-row">`;
       out += `<div class="rank-no">${i === 0 ? "👑" : (i + 1)}</div>`;
       out += `<div class="rank-name">${esc(m)}</div>`;
@@ -837,21 +859,32 @@
     candidates.forEach(m => {
       const l = document.createElement("label");
       const c = document.createElement("input");
-      c.type = "checkbox"; c.checked = weeklyExcluded.has(m); c.disabled = confirmed || busy;
-      c.onchange = () => { c.checked ? weeklyExcluded.add(m) : weeklyExcluded.delete(m); renderAll(); };
-      l.append(c, document.createTextNode(m));
+      c.type = "checkbox"; c.checked = weeklyExcluded.has(m) || weekExemptDone.has(m); c.disabled = confirmed || busy;
+      c.onchange = () => {
+        if (c.checked) markExemptDone(m);
+        else {
+          weeklyExcluded.delete(m);
+          if (weekExemptDone.has(m)) {
+            weekExemptDone.delete(m);
+            doneGomi = doneGomi.filter(x => x !== m);
+            doneSouji = doneSouji.filter(x => x !== m);
+          }
+        }
+        computePools(); renderAll();
+      };
+      l.append(c, document.createTextNode(m + (weekExemptDone.has(m) ? "（達成済み）" : "")));
       box.appendChild(l);
     });
     if (!candidates.length) box.textContent = "候補がいません。";
   }
   function renderInfo() {
     $("info").textContent = confirmed
-      ? (drawRole === ROLE_GOMI ? "【1回目・ゴミ捨て当番】[Space] / ボタンでスタート・ストップ" : "【2回目・掃除当番】[Space] / ボタンでスタート・ストップ")
-      : "まず「除外を確定する」を押してから抽選できます。\n（1回目：ゴミ捨て → 2回目：掃除）\n※途中で閉じた場合は抽選は無効。次回は最初からやり直しです。";
+      ? (drawRole === ROLE_GOMI ? "【1回目・ゴミ捨て当番】中央SPIN / [Space] / ボタンでスタート・ストップ" : "【2回目・掃除当番】中央SPIN / [Space] / ボタンでスタート・ストップ")
+      : "まず「免除を確定する」を押してから抽選できます。\n（1回目：ゴミ捨て → 2回目：掃除）\n※途中で閉じた場合は抽選は無効。次回は最初からやり直しです。";
     $("info").style.whiteSpace = "pre-line";
     const slotN = useWeekSlots() ? activePool().length : null;
     $("status").textContent = useWeekSlots()
-      ? `総メンバー: ${members.length}人 / 今週枠: ${THIS_WEEK_SLOTS.length}（重複込） / 抽選中の枠: ${slotN ?? "-"} / 除外: ${weeklyExcluded.size}`
+      ? `総メンバー: ${members.length}人 / 今週枠: ${THIS_WEEK_SLOTS.length}（重複込） / 抽選中の枠: ${slotN ?? "-"} / 達成済み免除: ${weekExemptDone.size}`
       : `総メンバー: ${members.length}人 / ゴミ残り: ${candG.length} / 掃除残り: ${candS.length}`;
   }
   function renderButtons() {
@@ -941,22 +974,21 @@
       ctx.fillStyle = g; ctx.fill();
       ctx.strokeStyle = "#ffe27a"; ctx.lineWidth = W * 0.004; ctx.stroke();
 
-      // 名前
+      // 名前：全員同じ向き（画面に対して正立の横書き）
       const mid = (start + ext / 2) * Math.PI / 180, ang = -mid;
       const px = cx + Math.cos(ang) * rWheel * 0.62, py = cy + Math.sin(ang) * rWheel * 0.62;
       const arc = ext * Math.PI / 180 * rWheel * 0.62;
-      const fs = Math.max(Math.min(W * 0.05, arc * 0.42, rWheel * 0.11), W * 0.02);
+      const fs = Math.max(Math.min(W * 0.048, arc * 0.5, rWheel * 0.1), W * 0.022);
       ctx.save(); ctx.translate(px, py);
-      let rot = ang; if (Math.cos(ang) < 0) rot += Math.PI; // 左側は反転して読めるように
-      ctx.rotate(rot);
+      // rotateしない → みな同じ方向（上向き・横書き）
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.font = `900 ${fs}px "Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif`;
-      ctx.lineJoin = "round"; ctx.lineWidth = fs * 0.2;
-      ctx.strokeStyle = c.t === "#fff" || c.t === "#ffe27a" ? "rgba(0,0,0,.65)" : "rgba(255,255,255,.7)";
-      ctx.strokeText(m, 0, -fs * 0.28); ctx.fillStyle = c.t; ctx.fillText(m, 0, -fs * 0.28);
-      ctx.font = `800 ${fs * 0.55}px sans-serif`; ctx.lineWidth = fs * 0.12;
+      ctx.lineJoin = "round"; ctx.lineWidth = fs * 0.22;
+      ctx.strokeStyle = "rgba(0,0,0,.75)";
+      ctx.strokeText(m, 0, -fs * 0.22); ctx.fillStyle = "#fffef0"; ctx.fillText(m, 0, -fs * 0.22);
+      ctx.font = `800 ${fs * 0.52}px sans-serif`; ctx.lineWidth = fs * 0.14;
       const lab = `x${w.toFixed(1)}`;
-      ctx.strokeText(lab, 0, fs * 0.55); ctx.fillText(lab, 0, fs * 0.55);
+      ctx.strokeText(lab, 0, fs * 0.52); ctx.fillStyle = "#ffe27a"; ctx.fillText(lab, 0, fs * 0.52);
       ctx.restore();
       start += ext;
     });
@@ -1067,20 +1099,20 @@
     const winDlg = async () => {
       await splashFx("win", pickPhrase("win"), 2500);
       await modal(
-        `<div class="head">今週の${role === ROLE_GOMI ? "ゴミ捨て" : "掃除"}当番は</div><div class="big">【 ${esc(winner)} 】</div><div class="head">さんです！</div><div class="body" style="margin-top:12px">この抽選での当選確率：${rate.toFixed(1)}%</div>`,
+        `<div class="head">今週の${role === ROLE_GOMI ? "ゴミ捨て" : "掃除"}当番は</div><div class="big gold-name">【 ${esc(winner)} 】</div><div class="head">さんです！</div><div class="body" style="margin-top:12px">この抽選での当選確率：${rate.toFixed(1)}%</div>`,
         [{ label: "OK", value: true, cls: "red" }], "fx-win");
     };
 
     if (role === ROLE_GOMI) {
       sessionG = winner;
-      $("winner").textContent = `ゴミ捨て当番 決定\n【 ${winner} 】さん（この抽選 ${rate.toFixed(1)}%）\n\n続けて掃除当番を抽選\n（※掃除まで終えるまで保存されません）`;
+      $("winner").innerHTML = `ゴミ捨て当番 決定\n<span class="gold-name">【 ${esc(winner)} 】</span>さん（この抽選 ${rate.toFixed(1)}%）\n\n続けて掃除当番を抽選\n（※掃除まで終えるまで保存されません）`;
       await winDlg();
       drawRole = ROLE_SOUJI;
       computePools(); busy = false; renderAll();
     } else {
       applyExclusionBonus();
       lastG = sessionG; lastS = winner;
-      $("winner").textContent = `ゴミ捨て：【 ${sessionG} 】さん\n掃除：【 ${winner} 】さん\n（掃除の当選確率 ${rate.toFixed(1)}%）`;
+      $("winner").innerHTML = `ゴミ捨て：<span class="gold-name">【 ${esc(sessionG)} 】</span>さん\n掃除：<span class="gold-name">【 ${esc(winner)} 】</span>さん\n（掃除の当選確率 ${rate.toFixed(1)}%）`;
       await winDlg();
       sessionG = null; drawRole = ROLE_GOMI; weeklyExcluded.clear(); confirmed = false;
       computePools(); renderAll();
@@ -1153,8 +1185,10 @@
   }
   function cancelConfirm() { confirmed = false; drawRole = ROLE_GOMI; sessionG = null; renderAll(); }
   function clearExclusions() {
+    // 達成済み免除の done 印は残し、手動チェック分だけ外す
+    const keep = new Set(weekExemptDone);
     weeklyExcluded.clear();
-    // 免除対象はクリア後も再適用（手動解除は個別チェックで）
+    keep.forEach(n => weeklyExcluded.add(n));
     applyThisWeekExemptions();
     cancelConfirm();
   }
@@ -1204,7 +1238,7 @@
     if (ex.applied.length || ex.leftover.length) {
       let body = "";
       if (ex.applied.length) {
-        body += "【今週ルーレットから除外】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+        body += "【今週は達成済み扱い（免除）】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
       }
       if (ex.leftover.length) {
         body += "【次週へ持ち越し（今週枠にいなかった免除）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n");
