@@ -44,17 +44,17 @@
   @keyframes twinkle { from { opacity: .25; } to { opacity: .8; } }
 
   header {
-    text-align: center; padding: 4px 8px 0; position: relative; flex: 0 0 auto;
-    display: flex; align-items: baseline; justify-content: center; gap: 10px; flex-wrap: wrap;
+    text-align: center; padding: 6px 8px 2px; position: relative; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
   }
   .tag {
     display: inline-block; font-weight: 900; font-style: italic; letter-spacing: .12em;
-    font-size: 10px; padding: 1px 10px; border-radius: 999px;
+    font-size: 12px; padding: 2px 12px; border-radius: 999px;
     background: linear-gradient(180deg, var(--gold1), var(--gold2) 55%, var(--gold3));
     color: #4a0010; box-shadow: 0 0 14px rgba(255, 210, 0, .7);
   }
   h1 {
-    margin: 0; font-size: clamp(18px, 2.2vw, 28px); font-weight: 900; font-style: italic;
+    margin: 0; font-size: clamp(28px, 3.6vw, 48px); font-weight: 900; font-style: italic;
     letter-spacing: .04em;
     background: linear-gradient(180deg, #fffbd0 0%, #ffd83a 45%, #c98a00 52%, #ffe36a 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -84,11 +84,13 @@
   .small { font-size: 11px; opacity: .8; }
 
   /* 今週の1枚 / クイズ */
+  #weeklyTitle { font-size: clamp(18px, 2vw, 26px); }
   #weeklyTitle.quiz { color: #ff6a6a; text-shadow: 0 0 12px rgba(255, 40, 40, .9); }
   .bubble {
-    position: relative; margin: 0 0 14px; padding: 8px 10px; border-radius: 12px;
+    position: relative; margin: 0 0 14px; padding: 14px 12px; border-radius: 12px;
     background: linear-gradient(180deg, #fff, #ffeab0); color: #2a0010; font-weight: 800;
-    border: 3px solid var(--red2); text-align: center; white-space: pre-wrap; font-size: 14px;
+    border: 3px solid var(--red2); text-align: center; white-space: pre-wrap;
+    font-size: clamp(18px, 1.8vw, 28px); line-height: 1.45;
     box-shadow: 0 0 14px rgba(255, 60, 60, .55);
   }
   .bubble::after {
@@ -111,7 +113,7 @@
     width: min(100%, calc(100vh - 168px), 72vw);
     max-width: 100%; aspect-ratio: 1; flex: 0 1 auto;
   }
-  canvas { width: 100%; height: 100%; display: block; }
+  canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
   #info {
     text-align: center; font-weight: 800; min-height: 0; font-size: 12px;
     text-shadow: 0 0 8px #000; flex: 0 0 auto; max-width: 100%;
@@ -152,11 +154,36 @@
   #excludeList input { width: 16px; height: 16px; accent-color: #ff3b3b; }
   #excludeList label:has(input:checked) { background: rgba(255, 40, 40, .3); }
   #ranking {
-    flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px 8px; border-radius: 10px; font-size: 12px;
-    background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 210, 0, .35); white-space: pre-wrap;
+    flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px; border-radius: 10px; font-size: 14px;
+    background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 210, 0, .35);
   }
-  #ranking b { color: var(--gold2); }
-  .panel h2.rank-title { margin-top: 8px; }
+  #ranking .rank-sec {
+    margin: 0 0 10px; font-size: 15px; font-weight: 900; color: var(--gold1);
+    text-shadow: 0 0 8px rgba(255,190,0,.6);
+  }
+  #ranking .rank-note { font-size: 12px; opacity: .85; margin-bottom: 8px; white-space: pre-wrap; }
+  #ranking .rank-row {
+    display: grid; grid-template-columns: 28px minmax(52px, 72px) 1fr auto;
+    gap: 6px; align-items: center; margin: 0 0 7px; font-size: 14px; font-weight: 800;
+  }
+  #ranking .rank-no { color: var(--gold2); text-align: center; }
+  #ranking .rank-name { color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #ranking .rank-bar-wrap {
+    height: 16px; border-radius: 999px; background: rgba(0,0,0,.45);
+    border: 1px solid rgba(255,210,0,.35); overflow: hidden;
+  }
+  #ranking .rank-bar {
+    height: 100%; border-radius: 999px; min-width: 4px;
+    background: linear-gradient(90deg, #ff4b4b, #ffd000 55%, #fff3a8);
+    box-shadow: 0 0 10px rgba(255,80,40,.55);
+  }
+  #ranking .rank-bar.dim {
+    background: linear-gradient(90deg, #666, #999);
+    box-shadow: none; opacity: .55;
+  }
+  #ranking .rank-meta { font-size: 12px; color: #ffe9a0; white-space: nowrap; min-width: 7.5em; text-align: right; }
+  #ranking .rank-st { grid-column: 2 / -1; font-size: 11px; opacity: .75; margin: -4px 0 4px; }
+  .panel h2.rank-title { margin-top: 8px; font-size: 17px; }
 
   /* モーダル */
   #overlay {
@@ -192,32 +219,46 @@
   .tabquiz button { color: #fff; background: #e63946; box-shadow: none; font-size: 20px; padding: 8px 18px; }
   textarea.msg { width: 100%; height: 180px; border-radius: 10px; padding: 8px; font: inherit; font-size: 13px; color: #170320; }
 
-  /* 演出オーバーレイ */
+  /* 演出オーバーレイ（全画面・端まで届くストライプ） */
   #fx {
-    position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none;
+    position: fixed; inset: 0; z-index: 80; display: none; pointer-events: none;
     overflow: hidden;
   }
-  #fx.on { display: block; }
+  #fx.on { display: block; pointer-events: auto; }
   #fx .fx-bg { position: absolute; inset: 0; }
+  #fx .fx-spin-wrap {
+    position: absolute; left: 50%; top: 50%;
+    width: 300vmax; height: 300vmax;
+    margin: -150vmax 0 0 -150vmax;
+    animation: spinburst 10s linear infinite;
+    will-change: transform;
+  }
   #fx .fx-burst {
-    position: absolute; left: 50%; top: 45%; width: 140vmax; height: 140vmax;
-    margin: -70vmax; border-radius: 50%;
-    background: conic-gradient(from 0deg, #ff0040, #ffd000, #00ff88, #ff00cc, #ff0040);
-    animation: spinburst 8s linear infinite; opacity: .55; filter: blur(2px);
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, #ff0040, #ffd000, #00ff88, #ff00cc, #ff4b00, #ff0040);
+    opacity: .7; filter: saturate(1.3);
   }
   #fx .fx-rays {
-    position: absolute; inset: -20%;
-    background: repeating-conic-gradient(from 0deg, rgba(255,210,0,.45) 0 8deg, transparent 8deg 16deg);
-    animation: spinburst 14s linear infinite; opacity: .5;
+    position: absolute; inset: 0;
+    background: repeating-conic-gradient(
+      from 0deg,
+      #ff2d55 0deg 7deg,
+      #ffd000 7deg 14deg,
+      #39ff14 14deg 21deg,
+      #00e5ff 21deg 28deg,
+      #c77dff 28deg 35deg,
+      #ff7a00 35deg 42deg
+    );
+    opacity: .92;
   }
   #fx .fx-vignette {
     position: absolute; inset: 0;
-    background: radial-gradient(circle at 50% 40%, transparent 10%, rgba(0,0,0,.75) 70%);
+    background: radial-gradient(circle at 50% 45%, transparent 8%, rgba(0,0,0,.35) 55%, rgba(0,0,0,.72) 100%);
   }
-  #fx.win .fx-bg { background: radial-gradient(circle at 50% 30%, #6e0a24, #120308 70%); }
-  #fx.praise .fx-bg { background: radial-gradient(circle at 50% 40%, #fff7b0, #ff6ad5 45%, #4b00a8 90%); }
+  #fx.win .fx-bg { background: #1a0508; }
+  #fx.praise .fx-bg { background: #2a0860; }
   #fx.fail .fx-bg { background: #000; }
-  #fx.yes .fx-bg { background: radial-gradient(circle at 50% 40%, #ff3b3b, #5a0008 70%, #000 100%); }
+  #fx.yes .fx-bg { background: #2a0008; }
   #fx .fx-feather, #fx .fx-spark, #fx .fx-fire {
     position: absolute; border-radius: 50%; pointer-events: none;
   }
@@ -235,14 +276,14 @@
     animation: firework ease-out forwards;
   }
   #fx .fx-crown {
-    position: absolute; left: 50%; top: 8%; transform: translateX(-50%);
-    font-size: clamp(40px, 10vw, 84px); filter: drop-shadow(0 0 16px gold);
-    animation: bounceIn .5s ease-out;
+    position: absolute; left: 50%; top: 6%; transform: translateX(-50%);
+    font-size: clamp(48px, 11vw, 96px); filter: drop-shadow(0 0 16px gold);
+    animation: bounceIn .5s ease-out; z-index: 2;
   }
   #fx .fx-curtains::before, #fx .fx-curtains::after {
-    content: ""; position: absolute; top: 0; bottom: 0; width: 18%;
+    content: ""; position: absolute; top: 0; bottom: 0; width: 14%; z-index: 1;
     background: linear-gradient(90deg, #6e0008, #c40a14 40%, #8a0010);
-    opacity: .85; box-shadow: 0 0 30px rgba(180,0,20,.6);
+    opacity: .8; box-shadow: 0 0 30px rgba(180,0,20,.6);
   }
   #fx .fx-curtains::before { left: 0; border-radius: 0 40% 40% 0 / 0 20% 20% 0; }
   #fx .fx-curtains::after { right: 0; border-radius: 40% 0 0 40% / 20% 0 0 20%; }
@@ -251,7 +292,37 @@
     margin-left: -25vmin; border-radius: 50%;
     background: radial-gradient(ellipse, rgba(255,255,255,.55), transparent 70%);
   }
+  #fx .fx-splash {
+    position: absolute; left: 50%; top: 50%; z-index: 5;
+    transform: translate(-50%, -50%);
+    width: min(96vw, 1100px); text-align: center; padding: 0 12px;
+    font-weight: 900; font-style: italic; letter-spacing: .06em;
+    font-size: clamp(52px, 12vw, 120px); line-height: 1.05;
+    color: #fff8c0;
+    text-shadow:
+      0 0 12px #fff,
+      0 0 28px #ffd000,
+      0 0 48px #ff0040,
+      4px 4px 0 #5a0010,
+      -2px -2px 0 #ff0040;
+    -webkit-text-stroke: 2px #5a0010;
+    animation: splashIn .55s cubic-bezier(.2,1.4,.4,1) both, splashShine 1.1s ease-in-out .4s infinite alternate;
+    filter: drop-shadow(0 0 24px rgba(255,210,0,.9));
+  }
+  #fx.fail .fx-splash {
+    color: #777; -webkit-text-stroke: 1px #222;
+    text-shadow: 0 0 18px rgba(255,255,255,.15); animation: splashIn .55s ease-out both;
+  }
   @keyframes spinburst { to { transform: rotate(360deg); } }
+  @keyframes splashIn {
+    from { transform: translate(-50%, -50%) scale(.2) rotate(-8deg); opacity: 0; }
+    70% { transform: translate(-50%, -50%) scale(1.12) rotate(2deg); opacity: 1; }
+    to { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
+  }
+  @keyframes splashShine {
+    from { filter: drop-shadow(0 0 18px rgba(255,210,0,.7)) brightness(1); }
+    to { filter: drop-shadow(0 0 40px rgba(255,80,40,1)) brightness(1.15); }
+  }
   @keyframes floatDown {
     from { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
     15% { opacity: .9; }
@@ -320,10 +391,11 @@
     .panel { max-height: none; overflow: visible; }
   }
   @media (max-height: 820px) and (min-width: 1101px) {
-    .wheel-wrap { width: min(100%, calc(100vh - 150px), 68vw); }
-    h1 { font-size: clamp(16px, 1.8vw, 24px); }
+    .wheel-wrap { width: min(100%, calc(100vh - 168px), 64vw); }
+    h1 { font-size: clamp(24px, 3vw, 40px); }
     #winner { font-size: clamp(13px, 1.4vw, 18px); }
     .attack { font-size: clamp(14px, 1.7vw, 20px); padding: 6px; }
+    #fx .fx-splash { font-size: clamp(40px, 9vw, 90px); }
   }
 </style>
 </head>
@@ -380,7 +452,7 @@
   // 今週のルーレット枠（名簿本体は変更せず、帳尻合わせで同名枠を重複可）
   // 残メンバー + 帳尻合わせ追加（幡鎌・中田は重複枠）
   const THIS_WEEK_SLOTS = ["幡鎌", "若旅", "中田", "田中", "芝原", "陳", "白井", "幡鎌", "中田", "伊賀", "上出"];
-  const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10 };
+  const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10, "上出": 3 };
   const THIS_WEEK_EXEMPTIONS = [
     { name: "田中", reason: "ゴミ捨てボランティア" },
     { name: "中田", reason: "掃除ボランティア" },
@@ -390,7 +462,17 @@
     { name: "椎名", reason: "プリンタ破棄" },
     { name: "田中", reason: "ゴミ捨てボランティア" },
   ];
-  const TICK_DEG = 15;
+  const TICK_DEG = 40;
+  const FX_PHRASES = {
+    win: ["大当り！！", "決定！！", "超激アツ！！", "運命の選択！！", "ジャックポット！！"],
+    yes: ["任務完了！！", "完璧！！", "いざ出陣！！", "ナイスプレイ！！", "完っ璧！！"],
+    praise: ["えらい！感謝！", "神対応！！", "感謝感激！！", "ヒーロー！！", "最高！！"],
+    fail: ["任務失敗…", "未完了…", "終了…", "ざんねん…"],
+  };
+  const pickPhrase = mode => {
+    const arr = FX_PHRASES[mode] || ["！！"];
+    return arr[Math.floor(Math.random() * arr.length)];
+  };
   // パチンコ風の配色（赤・金・白・黒・橙・紫）
   const SEG = [
     { a: "#ff4040", b: "#a00010", t: "#fff" },
@@ -424,11 +506,12 @@
 
   // ---------- 演出 ----------
   let fxTimer = null;
+  let hubR = 80;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   function clearFx() {
     const fx = $("fx");
     fx.className = "";
     fx.querySelector(".fx-layer").innerHTML = "";
-    fx.classList.remove("on");
     if (fxTimer) { clearTimeout(fxTimer); fxTimer = null; }
   }
   function spawnParticles(kind, n) {
@@ -446,27 +529,35 @@
       layer.appendChild(el);
     }
   }
-  function showFx(mode) {
+  function showFx(mode, phrase) {
     clearFx();
     const fx = $("fx");
     fx.className = "on " + mode;
     const layer = fx.querySelector(".fx-layer");
+    const text = phrase || pickPhrase(mode);
+    const splash = `<div class="fx-splash">${esc(text)}</div>`;
+    const spin = (inner) => `<div class="fx-spin-wrap">${inner}</div>`;
     if (mode === "win") {
-      layer.innerHTML = '<div class="fx-curtains"></div><div class="fx-rays"></div><div class="fx-vignette"></div>';
+      layer.innerHTML = `<div class="fx-curtains"></div>${spin('<div class="fx-rays"></div>')}<div class="fx-vignette"></div>${splash}`;
       spawnParticles("fx-feather", 28); spawnParticles("fx-spark", 40);
     } else if (mode === "praise") {
-      layer.innerHTML = '<div class="fx-burst"></div><div class="fx-rays"></div><div class="fx-crown">👑</div><div class="fx-vignette"></div>';
+      layer.innerHTML = `${spin('<div class="fx-burst"></div><div class="fx-rays"></div>')}<div class="fx-crown">👑</div><div class="fx-vignette"></div>${splash}`;
       spawnParticles("fx-spark", 60);
     } else if (mode === "fail") {
-      layer.innerHTML = '<div class="fx-spot"></div>';
+      layer.innerHTML = `<div class="fx-spot"></div>${splash}`;
     } else if (mode === "yes") {
-      layer.innerHTML = '<div class="fx-rays"></div><div class="fx-vignette"></div>';
+      layer.innerHTML = `${spin('<div class="fx-rays"></div>')}<div class="fx-vignette"></div>${splash}`;
       spawnParticles("fx-fire", 50); spawnParticles("fx-spark", 40);
+    } else {
+      layer.innerHTML = splash;
     }
   }
-  function withFx(mode, ms = 4500) {
-    showFx(mode);
-    fxTimer = setTimeout(clearFx, ms);
+  /** 脳汁ワードを先に全画面表示 → そのあと詳細モーダル用に消す */
+  async function splashFx(mode, phrase, ms = 2200) {
+    showFx(mode, phrase || pickPhrase(mode));
+    if (mode === "win" || mode === "praise" || mode === "yes") playSfx("win", 0.9);
+    await sleep(ms);
+    clearFx();
   }
 
   // ---------- 状態（roulette.py と同じくセッション終了までメモリのみ） ----------
@@ -496,7 +587,6 @@
         if (b.cls) el.className = b.cls;
         el.onclick = () => {
           $("overlay").classList.remove("open");
-          clearFx();
           resolve(b.value);
         };
         bar.appendChild(el);
@@ -633,13 +723,12 @@
       // 今週ブースト対象は完了しても倍率を消さない（ルーレット用）
       if (!(last in THIS_WEEK_BOOST)) delete wmap[last];
       if (r === "yes") {
-        withFx("yes", 5000);
+        await splashFx("yes", pickPhrase("yes"), 2400);
         await modal(
           `<div class="head">任務完了！</div><div class="big">いざ出陣！</div><div class="head" style="margin-top:8px">【 ${esc(last)} 】さん ${esc(duty)}当番 完了</div>`,
           [{ label: "OK", value: true, cls: "red" }], "fx-yes");
       } else {
-        withFx("praise", 5500);
-        playSfx("win", 0.85);
+        await splashFx("praise", "えらい！感謝！", 2600);
         await modal(
           `<div class="big praise">えらい！感謝！</div><div class="big" style="font-size:clamp(28px,6vw,44px)">【 ${esc(last)} 】さん</div><div class="head">${esc(extraLabel)}</div>`,
           [{ label: "OK", value: true, cls: "red" }], "fx-praise");
@@ -647,7 +736,7 @@
     } else {
       wmap[last] = Math.max(wmap[last] ?? 1.0, PENALTY_RATE);
       prevUnfinished.add(key(role, last));
-      withFx("fail", 4500);
+      await splashFx("fail", pickPhrase("fail"), 2200);
       await modal(
         `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：今週の当選倍率を${PENALTY_RATE}倍にします。\n次の周に入るときは、持ち越し分として+100%に変換します。</div>`,
         [{ label: "OK", value: true, cls: "dark" }], "fx-fail");
@@ -703,32 +792,42 @@
   // ---------- 右パネル ----------
   function rankingBlock(role, exclude) {
     const wm = roleWeights(role);
-    const pool = new Set(roleCandidates(role));
+    const pool = new Set(useWeekSlots()
+      ? THIS_WEEK_SLOTS.filter(m => !weeklyExcluded.has(m) && !(role === ROLE_SOUJI && sessionG === m))
+      : roleCandidates(role));
     const sorted = [...members].sort((a, b) => (wm[b] ?? 1) - (wm[a] ?? 1));
+    const maxW = Math.max(1, ...sorted.map(m => wm[m] ?? 1));
     const total = [...pool].reduce((s, m) => s + (wm[m] ?? 1), 0);
     let out = "";
     sorted.forEach((m, i) => {
       const w = wm[m] ?? 1;
       const prob = pool.has(m) && total > 0 ? (w / total) * 100 : 0;
+      const bar = Math.max(4, Math.round((w / maxW) * 100));
       let st;
       if (weeklyExcluded.has(m)) st = "今週除外";
       else if (exclude.has(m)) st = "今回のゴミ当番";
-      else if (!pool.has(m)) st = (role === ROLE_GOMI ? "掃除" : "ゴミ") + "ペナルティ対象";
+      else if (!pool.has(m)) st = (role === ROLE_GOMI ? "掃除" : "ゴミ") + "対象外";
       else if (doneGomi.includes(m) || doneSouji.includes(m)) st = "今周完了済み";
       else st = "抽選対象";
-      out += `${i === 0 ? "👑" : (i + 1) + "."} <b>${esc(m)}</b>\n`;
-      out += `    倍率: ${w.toFixed(2)}倍 / 当番目安: ${pool.has(m) ? prob.toFixed(1) + "%" : "-"} / ${st}\n\n`;
+      const dim = !pool.has(m) || weeklyExcluded.has(m);
+      out += `<div class="rank-row">`;
+      out += `<div class="rank-no">${i === 0 ? "👑" : (i + 1)}</div>`;
+      out += `<div class="rank-name">${esc(m)}</div>`;
+      out += `<div class="rank-bar-wrap"><div class="rank-bar${dim ? " dim" : ""}" style="width:${bar}%"></div></div>`;
+      out += `<div class="rank-meta">${w.toFixed(1)}倍${pool.has(m) ? ` / ${prob.toFixed(0)}%` : ""}</div>`;
+      out += `</div><div class="rank-st">${esc(st)}</div>`;
     });
     return out;
   }
   function renderRanking() {
     let h = "";
     if (!confirmed) {
-      h += "〔確定前：全員分を表示〕\n1回目＝ゴミ／2回目＝掃除です。\n\n── ゴミ捨て当番 ──\n\n" + rankingBlock(ROLE_GOMI, new Set());
-      h += "── 掃除当番 ──\n\n" + rankingBlock(ROLE_SOUJI, sessionG ? new Set([sessionG]) : new Set());
+      h += `<div class="rank-note">〔確定前：全員分〕1回目＝ゴミ／2回目＝掃除</div>`;
+      h += `<div class="rank-sec">── ゴミ捨て当番 ──</div>` + rankingBlock(ROLE_GOMI, new Set());
+      h += `<div class="rank-sec">── 掃除当番 ──</div>` + rankingBlock(ROLE_SOUJI, sessionG ? new Set([sessionG]) : new Set());
     } else {
       const ex = drawRole === ROLE_SOUJI && sessionG ? new Set([sessionG]) : new Set();
-      h += `〔${roleName(drawRole)}当番・全体ランキング〕\n\n` + rankingBlock(drawRole, ex);
+      h += `<div class="rank-sec">〔${roleName(drawRole)}当番・危険度〕</div>` + rankingBlock(drawRole, ex);
     }
     $("ranking").innerHTML = h;
   }
@@ -892,8 +991,11 @@
     hg2.addColorStop(0, "#ff6a5a"); hg2.addColorStop(1, "#8a0010");
     ctx.fillStyle = hg2; ctx.fill();
     ctx.fillStyle = "#fff6c0"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = `900 italic ${hr * .5}px sans-serif`;
-    ctx.fillText(drawRole === ROLE_GOMI ? "ゴミ" : "掃除", cx, cy);
+    ctx.font = `900 italic ${hr * .42}px sans-serif`;
+    ctx.fillText(drawRole === ROLE_GOMI ? "ゴミ" : "掃除", cx, cy - hr * .12);
+    ctx.font = `800 ${hr * .28}px sans-serif`;
+    ctx.fillText(spinning ? "STOP" : "SPIN", cx, cy + hr * .32);
+    hubR = hr;
   }
 
   // ---------- 抽選 ----------
@@ -925,12 +1027,12 @@
       if (spinning) {
         const prevAng = angle;
         angle = (angle + speed) % 360;
-        // 矢印が15度進むごとに1回（速い＝ピロピロ、遅い＝間隔が開く）
+        // 矢印が40度進むごとに1回（速い＝ピロピロ、遅い＝間隔が開く）
         let from = Math.floor(prevAng / TICK_DEG);
         const to = Math.floor(angle / TICK_DEG);
         const sectors = 360 / TICK_DEG;
         let steps = 0;
-        while (from !== to && steps < 4) {
+        while (from !== to && steps < 3) {
           from = (from + 1) % sectors;
           playSfx("tick", Math.min(0.85, 0.35 + speed / 40));
           steps++;
@@ -963,8 +1065,7 @@
     const rate = (winWeight / total) * 100;
     const role = drawRole;
     const winDlg = async () => {
-      playSfx("win");
-      withFx("win", 6000);
+      await splashFx("win", pickPhrase("win"), 2500);
       await modal(
         `<div class="head">今週の${role === ROLE_GOMI ? "ゴミ捨て" : "掃除"}当番は</div><div class="big">【 ${esc(winner)} 】</div><div class="head">さんです！</div><div class="body" style="margin-top:12px">この抽選での当選確率：${rate.toFixed(1)}%</div>`,
         [{ label: "OK", value: true, cls: "red" }], "fx-win");
@@ -1062,6 +1163,14 @@
   $("cancelBtn").onclick = cancelConfirm;
   $("clearBtn").onclick = clearExclusions;
   $("spinBtn").onclick = toggleSpin;
+  canvas.addEventListener("click", e => {
+    if (busy || finished) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const dx = x - canvas.width / 2, dy = y - canvas.height / 2;
+    if (Math.hypot(dx, dy) <= hubR * 1.2) toggleSpin();
+  });
   $("pullBtn").onclick = async () => {
     try {
       const r = await (await fetch(API + "/pull", { method: "POST" })).json();
