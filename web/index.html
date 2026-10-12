@@ -605,22 +605,14 @@
   const sadBgm = new Audio("/sounds/sad.mp3");
   sadBgm.preload = "auto"; sadBgm.loop = true; sadBgm.volume = 0.55;
   let tickLastAt = 0;
-  let tickInst = null;
   function playSfx(name, vol) {
     const base = SFX[name];
     if (!base) return;
-    // 回転ティック：前回から0.3秒未満ならスキップ（重なりすぎ防止）
+    // 回転ティック：0.1秒ごとに新規再生可（既に鳴っている音は止めず重ねる）
     if (name === "tick") {
       const now = performance.now();
       if (now - tickLastAt < TICK_COOLDOWN_MS) return;
       tickLastAt = now;
-      try {
-        if (tickInst) { try { tickInst.pause(); } catch (e) {} }
-        tickInst = base.cloneNode();
-        tickInst.volume = vol == null ? base.volume : vol;
-        tickInst.play().catch(() => {});
-      } catch (e) { /* ignore */ }
-      return;
     }
     try {
       const a = base.cloneNode();
@@ -735,18 +727,15 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const info = (title, text) => modal(`<div class="head">${esc(title)}</div><div class="body">${esc(text)}</div>`, [{ label: "OK", value: true }]);
 
-  function applyThisWeekBoost() {
-    for (const [name, mul] of Object.entries(THIS_WEEK_BOOST)) {
-      // 未実施ペナルティで積み上がった値は下げない
-      wG[name] = Math.max(Number(wG[name]) || 1, mul);
-      wS[name] = Math.max(Number(wS[name]) || 1, mul);
-    }
+  /** 今週枠中のみ画面上のブースト（保存データには書かない） */
+  function weekBoostOf(m) {
+    return useWeekSlots() ? (THIS_WEEK_BOOST[m] ?? 1) : 1;
   }
-  /** 総合危険度：ゴミ／掃除の高い方（ブースト＋未実施積み上げを反映） */
+  /** 総合危険度：ゴミ／掃除の高い方（今週枠ブースト＋未実施積み上げ） */
   function personalWeight(m) {
-    const base = THIS_WEEK_BOOST[m] ?? 1;
-    const gw = wG[m] != null ? Number(wG[m]) : base;
-    const sw = wS[m] != null ? Number(wS[m]) : base;
+    const base = weekBoostOf(m);
+    const gw = wG[m] != null ? Number(wG[m]) : 1;
+    const sw = wS[m] != null ? Number(wS[m]) : 1;
     return Math.max(gw, sw, base);
   }
   function effectiveWeight(role, m) {
@@ -822,8 +811,11 @@
         merged[m] = Math.max(Number(merged[m]) || 1.0, Number(w) || 1);
       }
     }
-    for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
-      merged[m] = Math.max(Number(merged[m]) || 1.0, mul);
+    // 今週特別枠のブーストは枠が終わるまでだけ重ねる（保存後は消える）
+    if (useWeekSlots()) {
+      for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
+        merged[m] = Math.max(Number(merged[m]) || 1.0, mul);
+      }
     }
     // 名簿全員に明示（欠けている人は1）
     members.forEach(m => { if (merged[m] == null) merged[m] = 1; });
@@ -880,9 +872,9 @@
     const wmap = role === ROLE_GOMI ? wG : wS;
     if (r === "yes" || r === "extra") {
       if (!done.includes(last)) done.push(last);
-      // 達成済み → 今週のルーレットから外す（幡鎌・芝原も同様）
-      if (useWeekSlots()) alreadyDoneExempt.add(last);
-      if (!(last in THIS_WEEK_BOOST)) delete wmap[last];
+      // 達成済み → 今週のルーレットから外す（ブースト対象・通常週どちらも）
+      alreadyDoneExempt.add(last);
+      delete wmap[last];
       if (r === "yes") {
         await splashFx("yes", pickPhrase("yes"), 2400);
         await modal(
@@ -975,7 +967,7 @@
     const poolSet = new Set(useRole ? activePool() : members);
     const total = rows.reduce((s, r) => s + (poolSet.has(r.m) ? r.w : 0), 0);
     const maxW = Math.max(1, ...rows.map(r => r.w));
-    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n基本：幡鎌・芝原=10 / 上出=3 / 他=1\n未実施「いいえ」→ さらに×10積み上げ（例:10→100）</div>`;
+    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n${useWeekSlots() ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1（保存後は消える）\n" : ""}未実施「いいえ」→ 倍率を残して次週も抽選対象\n達成「はい」→ 今週ルーレットから外す</div>`;
     h += `<div class="rank-sec">── ${useRole ? roleName(drawRole) + "抽選の相対" : "総合"}ランキング ──</div>`;
     rows.forEach((r, i) => {
       const inPool = poolSet.has(r.m) && !isOutOfWheel(r.m);
@@ -1202,7 +1194,7 @@
       if (spinning) {
         const prevAng = angle;
         angle = (angle + speed) % 360;
-        // 矢印が20度進むごとに1回（ただし0.3秒以内の連続はキャンセル）
+        // 矢印が20度進むごとに1回（0.1秒未満の連続はスキップ、重なり可）
         let from = Math.floor(prevAng / TICK_DEG);
         const to = Math.floor(angle / TICK_DEG);
         const sectors = 360 / TICK_DEG;
@@ -1358,12 +1350,13 @@
     try {
       const r = await (await fetch(API + "/archives", { cache: "no-store" })).json();
       const list = r.archives || [];
-      const cur = list.find(a => a.current) || list[list.length - 1];
+      const idx = list.findIndex(a => a.current);
+      const cur = (idx >= 0 ? list[idx] : null) || list[list.length - 1];
       el.textContent = cur
         ? `履歴 ${list.length}件 / 現在: ${cur.saved_at || cur.id}（ゴミ:${cur.gomi || "-"} 掃除:${cur.souji || "-"}）`
         : "まだ週履歴はありません（コピー保存後に増えます）";
-      $("archPrevBtn").disabled = list.length < 2;
-      $("archNextBtn").disabled = list.length < 2;
+      $("archPrevBtn").disabled = idx <= 0;
+      $("archNextBtn").disabled = idx < 0 || idx >= list.length - 1;
     } catch (e) {
       el.textContent = "履歴を取得できません";
     }
@@ -1441,19 +1434,16 @@
     lastS = hist.last_souji_winner ?? null;
     // 今週枠オーバーライドは、コピー保存が終わっていなければ有効
     weekSlotsActive = !hist.week_slots_finished;
+    // 既存の未実施ペナルティ等は消さない（ブーストは表示時のみ重ねる）
     wG = { ...(hist.weights_gomi || {}) };
     wS = { ...(hist.weights_souji || {}) };
     if (weekSlotsActive) {
       // 前回当番はゴミ=幡鎌 / 掃除=芝原
       lastG = "幡鎌";
       lastS = "芝原";
-      wG = {}; wS = {};
-      applyThisWeekBoost();
       // 確認のため前回当番は done から一旦外す（達成確認後に再判定）
       doneGomi = doneGomi.filter(m => m !== lastG);
       doneSouji = doneSouji.filter(m => m !== lastS);
-    } else {
-      applyThisWeekBoost();
     }
     renderWeekly();
     computePools(); renderAll();
@@ -1462,7 +1452,6 @@
     await checkPrevious(ROLE_GOMI);
     await checkPrevious(ROLE_SOUJI);
     await checkCycleReset();
-    applyThisWeekBoost();
     // ボランティア等：すでに実施済み → 達成済み扱い（自己申告とは別）／今週枠中のみ
     if (weekSlotsActive) {
       const ex = applyAlreadyDoneExemptions();

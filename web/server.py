@@ -238,8 +238,10 @@ class App:
     def _save_archive_snapshot(self, history: dict, label: str = "") -> str:
         root = self._archive_root()
         root.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        name = f"{stamp}.json"
+        # 同一秒の before/after が上書きされないよう microsecond + label
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in (label or "snap"))[:40]
+        name = f"{stamp}-{safe}.json"
         payload = {
             "saved_at": datetime.now().isoformat(timespec="seconds"),
             "label": label or stamp,
