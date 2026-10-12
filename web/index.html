@@ -463,6 +463,20 @@
     text-shadow: 0 0 8px #ff0040, 0 0 24px #ffd000, 4px 4px 0 #8a0000;
     font-size: clamp(40px, 10vw, 76px); transform: rotate(-4deg);
   }
+  #fx.perfect .fx-bg { background: #2a0418; }
+  .modal.fx-perfect {
+    width: min(96vw, 860px);
+    background: radial-gradient(circle at 50% 0%, #fff6c0, #ff3b6a 42%, #2a0860 100%) !important;
+    border-color: #fff6a0;
+    box-shadow: 0 0 60px rgba(255, 210, 0, .9), inset 0 0 40px rgba(255, 255, 255, .25);
+    animation: perfectPop .45s ease-out;
+  }
+  .modal.fx-perfect .big { font-size: clamp(34px, 7vw, 68px); color: #fff; }
+  @keyframes perfectPop {
+    from { transform: scale(.4) rotate(-6deg); opacity: 0; }
+    70% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+    to { transform: scale(1) rotate(0); opacity: 1; }
+  }
 
   @media (max-width: 1100px) {
     html, body { height: auto; overflow: auto; }
@@ -761,6 +775,9 @@
     } else if (mode === "yes") {
       layer.innerHTML = `${spin('<div class="fx-rays"></div>')}<div class="fx-vignette"></div>${splash}`;
       spawnParticles("fx-fire", 50); spawnParticles("fx-spark", 40);
+    } else if (mode === "perfect") {
+      layer.innerHTML = `<div class="fx-curtains"></div>${spin('<div class="fx-burst"></div><div class="fx-rays"></div>')}<div class="fx-crown">👑</div><div class="fx-vignette"></div>${splash}`;
+      spawnParticles("fx-feather", 36); spawnParticles("fx-spark", 70); spawnParticles("fx-fire", 40);
     } else {
       layer.innerHTML = splash;
     }
@@ -768,7 +785,7 @@
   /** 脳汁ワードを先に全画面表示 → そのあと詳細モーダル用に消す */
   async function splashFx(mode, phrase, ms = 2200) {
     showFx(mode, phrase || pickPhrase(mode));
-    if (mode === "win" || mode === "praise" || mode === "yes") playSfx("win", 0.9);
+    if (mode === "win" || mode === "praise" || mode === "yes" || mode === "perfect") playSfx("win", 0.9);
     await sleep(ms);
     clearFx();
   }
@@ -777,6 +794,9 @@
   let members = [], hist = {};
   let doneGomi = [], doneSouji = [], lastG = null, lastS = null, wG = {}, wS = {};
   let prevUnfinished = new Set();
+  let forgetCounts = {}; // やり忘れ回数（一周終了時に ×3/10 を回数ぶん）
+  let volunteerExempt = new Set();
+  let luckyRest = new Set();
   let candG = [], candS = [], candidates = [];
   let weeklyExcluded = new Set(); // 自己申告：今週だけルーレット不参加
   let alreadyDoneExempt = new Set(); // ボランティア等：この周は達成済み扱い
@@ -1002,6 +1022,7 @@
       wG[last] = Math.max(Number(wG[last]) || 1, next);
       wS[last] = Math.max(Number(wS[last]) || 1, next);
       prevUnfinished.add(key(role, last));
+      forgetCounts[last] = (forgetCounts[last] || 0) + 1;
       alreadyDoneExempt.delete(last);
       // 残り枠の続きでも、未達成の前回当番は盤面に戻す
       if (useWeekSlots() && !activeWeekSlots.includes(last)) activeWeekSlots.push(last);
@@ -1032,6 +1053,82 @@
     };
     wG = conv(wG, ROLE_GOMI, dG);
     wS = conv(wS, ROLE_SOUJI, dS);
+  }
+
+  function wheelNames() {
+    if (useWeekSlots()) return [...new Set(activeWeekSlots.filter(m => !isOutOfWheel(m)))];
+    return [...new Set([...candG, ...candS].filter(m => !isOutOfWheel(m)))];
+  }
+  function fmtW(w) {
+    if (Math.abs(w - Math.round(w)) < 1e-6) return String(Math.round(w));
+    return w < 1 ? w.toFixed(3) : w.toFixed(1);
+  }
+  /** やり忘れ n 回 → いまの倍率 × (3/10)^n 。例: 2回で100倍 → 9倍 */
+  function decayForgetWeights() {
+    const lines = [];
+    const contribN = {};
+    for (const e of ROOM_CONTRIBUTIONS) contribN[e.name] = (contribN[e.name] || 0) + 1;
+    const nextG = {}, nextS = {};
+    for (const m of members) {
+      const n = forgetCounts[m] || 0;
+      const contrib = Math.pow(CONTRIB_MUL, contribN[m] || 0);
+      let w;
+      if (n > 0) {
+        const cur = Math.max(Number(wG[m]) || 0, Number(wS[m]) || 0);
+        const base = cur > 0 ? cur : Math.pow(PENALTY_RATE, n);
+        w = base * Math.pow(3 / 10, n);
+        lines.push({ name: m, n, from: base, to: w });
+      } else {
+        w = contrib;
+      }
+      if (Math.abs(w - 1) > 1e-9) { nextG[m] = w; nextS[m] = w; }
+    }
+    wG = nextG; wS = nextS;
+    forgetCounts = {};
+    return lines;
+  }
+  async function celebrateAndRestart(lucky) {
+    await splashFx("perfect", "これは勝利最も完璧です", 2800);
+    const nameHtml = lucky.map(n => `<div class="big gold-name">【 ${esc(n)} 】</div>`).join("");
+    await modal(
+      `<div class="head">おめでとう！！</div><div class="big">これは勝利最も完璧です</div>${nameHtml}<div class="body">${lucky.length ? "残った人は、この一周はラッキーでお休みです。" : "残った人はいません。新しい一周を始めます。"}</div>`,
+      [{ label: "新しい一周へ", value: true, cls: "red" }],
+      "fx-perfect");
+    const decayed = decayForgetWeights();
+    weekSlotsActive = false;
+    weekSlotsContinue = false;
+    activeWeekSlots = [];
+    alreadyDoneExempt = new Set();
+    volunteerExempt = new Set();
+    luckyRest = new Set();
+    prevUnfinished = new Set();
+    doneGomi = []; doneSouji = [];
+    lastG = ""; lastS = "";
+    weeklyExcluded = new Set();
+    const vols = [...new Set(ROOM_CONTRIBUTIONS.map(e => e.name))].filter(n => members.includes(n));
+    for (const name of vols) {
+      volunteerExempt.add(name);
+      markAlreadyDone(name);
+      weeklyExcluded.add(name);
+    }
+    for (const name of lucky) {
+      if (volunteerExempt.has(name)) continue;
+      luckyRest.add(name);
+      markAlreadyDone(name);
+    }
+    hist.week_slots_finished = true;
+    hist.week_remaining_slots = [];
+    hist.forget_counts = {};
+    hist.volunteer_exempt = [...volunteerExempt];
+    hist.lucky_rest = [...luckyRest];
+    hist.room_contrib_applied = true;
+    confirmed = false; drawRole = ROLE_GOMI; sessionG = null;
+    computePools(); renderAll();
+    const dec = decayed.length
+      ? decayed.map(d => `・${d.name} 忘れ${d.n}回 ${fmtW(d.from)}倍 → ${fmtW(d.to)}倍`).join("\n")
+      : "なし";
+    await info("新しい一周（未保存）",
+      `全員を入れ直しました。\n連絡文のコピーを押すまで、data には保存されません。\n\n【ボランティア免除（チェック済み）】\n${vols.join("・") || "なし"}\n\n【ラッキーお休み】\n${lucky.join("・") || "なし"}\n\n【やり忘れ ×3/10】\n${dec}`);
   }
 
   async function checkCycleReset() {
@@ -1079,14 +1176,16 @@
     const poolSet = new Set(useRole ? activePool() : members);
     const total = rows.reduce((s, r) => s + (poolSet.has(r.m) ? r.w : 0), 0);
     const maxW = Math.max(1, ...rows.map(r => r.w));
-    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n${useWeekSlots() && !weekSlotsContinue ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1\n" : ""}${useWeekSlots() && weekSlotsContinue ? "残り枠の続き（未抽選メンバー）\n" : ""}未実施「いいえ」→ 現倍率×10（例:10→100）で残る\n達成「はい」→ 今週ルーレットから外す\n部屋貢献→ 1回ごと×0.9（同名は繰り返し）</div>`;
+    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n${useWeekSlots() && !weekSlotsContinue ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1\n" : ""}${useWeekSlots() && weekSlotsContinue ? "残り枠の続き（未抽選メンバー）\n" : ""}未実施「いいえ」→ 現倍率×10（例:10→100）で残る\n達成確認のあと 3人以上→継続 / 2人以下→勝利して一周リセット\nやり忘れ n回 → 一周終了時に ×(3/10)^n（2回で100倍→9倍）\n部屋貢献→ 1回ごと×0.9（同名は繰り返し）</div>`;
     h += `<div class="rank-sec">── ${useRole ? roleName(drawRole) + "抽選の相対" : "総合"}ランキング ──</div>`;
     rows.forEach((r, i) => {
       const inPool = poolSet.has(r.m) && !isOutOfWheel(r.m);
       const prob = inPool && total > 0 ? (r.w / total) * 100 : 0;
       const bar = Math.max(4, Math.round((r.w / maxW) * 100));
       let st = "抽選対象";
-      if (alreadyDoneExempt.has(r.m)) st = "達成済み（実施済み免除）";
+      if (luckyRest.has(r.m)) st = "ラッキーお休み";
+      else if (volunteerExempt.has(r.m)) st = "ボランティア免除";
+      else if (alreadyDoneExempt.has(r.m)) st = "達成済み（実施済み免除）";
       else if (weeklyExcluded.has(r.m)) st = "自己申告：今週免除";
       else if (sessionG === r.m) st = "今回のゴミ当番";
       else if (doneGomi.includes(r.m) && doneSouji.includes(r.m)) st = "今周完了済み";
@@ -1386,6 +1485,10 @@
         [{ label: "OK", value: true, cls: "red" }], "fx-win");
     };
 
+    if (!useWeekSlots()) {
+      const arr = role === ROLE_GOMI ? doneGomi : doneSouji;
+      if (!arr.includes(winner)) arr.push(winner);
+    }
     if (role === ROLE_GOMI) {
       sessionG = winner;
       $("winner").innerHTML = `ゴミ捨て当番 決定\n<span class="gold-name">【 ${esc(winner)} 】</span>さん（この抽選 ${rate.toFixed(1)}%）\n\n続けて掃除当番を抽選\n（※掃除まで終えるまで保存されません）`;
@@ -1465,6 +1568,9 @@
     d.weights_gomi = { ...wG }; d.weights_souji = { ...wS };
     d.pair_pending_souji = false; d.pair_session_excluded = [];
     d.room_contrib_applied = !!hist.room_contrib_applied;
+    d.forget_counts = { ...forgetCounts };
+    d.volunteer_exempt = [...volunteerExempt];
+    d.lucky_rest = [...luckyRest];
     alreadyDoneExempt.forEach(m => {
       if (!d.done_gomi.includes(m)) d.done_gomi.push(m);
       if (!d.done_souji.includes(m)) d.done_souji.push(m);
@@ -1605,6 +1711,9 @@
     lastS = hist.last_souji_winner ?? null;
     wG = { ...(hist.weights_gomi || {}) };
     wS = { ...(hist.weights_souji || {}) };
+    forgetCounts = { ...(hist.forget_counts || {}) };
+    volunteerExempt = new Set(hist.volunteer_exempt || []);
+    luckyRest = new Set(hist.lucky_rest || []);
     const remSlots = Array.isArray(hist.week_remaining_slots) ? hist.week_remaining_slots.filter(Boolean) : [];
     weekSlotsContinue = remSlots.length > 0;
     weekSlotsActive = weekSlotsContinue || !hist.week_slots_finished;
@@ -1624,8 +1733,7 @@
     // 先に前回のゴミ・掃除の実施確認（達成済み処理より前）
     await checkPrevious(ROLE_GOMI);
     await checkPrevious(ROLE_SOUJI);
-    await checkCycleReset();
-    // ボランティア等：達成済み扱い（続き枠では既に外れている想定）
+    let restarted = false;
     if (weekSlotsActive && !weekSlotsContinue) {
       const ex = applyAlreadyDoneExemptions();
       computePools();
@@ -1648,6 +1756,15 @@
       await info("部屋貢献の反映",
         contrib.detail.map(d => `・${d.name} ×${d.n}回 → ×${d.mul.toFixed(3)}`).join("\n"));
     }
+    computePools();
+    if (weekSlotsActive) {
+      const left = wheelNames();
+      if (left.length <= 2) {
+        await celebrateAndRestart(left);
+        restarted = true;
+      }
+    }
+    if (!restarted) await checkCycleReset();
     busy = false; renderAll();
   }
   init();
