@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a0626">
+<title>繧ｴ繝滓昏縺ｦ繝ｻ謗・勁蠖鍋分繝ｫ繝ｼ繝ｬ繝・ヨ</title>
+<style>
+  :root {
+    --gold1: #fff3a8;
+    --gold2: #f5c518;
+    --gold3: #b8860b;
+    --red1: #ff4b4b;
+    --red2: #c40a14;
+    --red3: #6e0008;
+    --ink: #170320;
+    --panel: rgba(24, 4, 34, 0.88);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    color: #fff;
+    font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(255, 60, 160, .45), transparent 38%),
+      radial-gradient(circle at 90% 20%, rgba(255, 190, 0, .28), transparent 36%),
+      radial-gradient(circle at 50% 100%, rgba(150, 0, 20, .55), transparent 50%),
+      linear-gradient(160deg, #2a0838 0%, #12031d 55%, #070108 100%);
+    background-attachment: fixed;
+    line-height: 1.5;
+  }
+  body::before { /* 縺阪ｉ縺阪ｉ */
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .55;
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+      radial-gradient(2px 2px at 120px 90px, #ffe27a, transparent),
+      radial-gradient(1.5px 1.5px at 210px 40px, #fff, transparent),
+      radial-gradient(2px 2px at 300px 150px, #ff9bd0, transparent),
+      radial-gradient(1.5px 1.5px at 60px 170px, #fff, transparent);
+    background-size: 340px 210px;
+    animation: twinkle 3.2s ease-in-out infinite alternate;
+  }
+  @keyframes twinkle { from { opacity: .25; } to { opacity: .8; } }
+
+  header { text-align: center; padding: 14px 12px 4px; position: relative; }
+  .tag {
+    display: inline-block; font-weight: 900; font-style: italic; letter-spacing: .12em;
+    font-size: 12px; padding: 2px 14px; border-radius: 999px;
+    background: linear-gradient(180deg, var(--gold1), var(--gold2) 55%, var(--gold3));
+    color: #4a0010; box-shadow: 0 0 14px rgba(255, 210, 0, .7);
+  }
+  h1 {
+    margin: 4px 0 0; font-size: clamp(24px, 4.6vw, 46px); font-weight: 900; font-style: italic;
+    letter-spacing: .04em;
+    background: linear-gradient(180deg, #fffbd0 0%, #ffd83a 45%, #c98a00 52%, #ffe36a 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 2px 0 #5a0010) drop-shadow(0 0 12px rgba(255, 70, 70, .75));
+  }
+
+  main {
+    display: grid; gap: 14px; padding: 10px 14px 28px; max-width: 1560px; margin: 0 auto;
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) minmax(280px, 380px);
+    align-items: start;
+  }
+  .panel {
+    background: var(--panel); border-radius: 18px; padding: 14px;
+    border: 2px solid transparent;
+    background-image: linear-gradient(var(--panel), var(--panel)),
+      linear-gradient(135deg, var(--gold1), var(--gold3) 40%, var(--gold2) 60%, var(--red1));
+    background-origin: border-box; background-clip: padding-box, border-box;
+    box-shadow: 0 0 22px rgba(255, 60, 60, .25), inset 0 0 28px rgba(255, 190, 0, .08);
+  }
+  h2 {
+    margin: 0 0 10px; text-align: center; font-size: 19px; font-weight: 900; font-style: italic;
+    color: var(--gold1); text-shadow: 0 0 10px rgba(255, 190, 0, .8);
+  }
+  h3 { margin: 12px 0 6px; font-size: 14px; color: var(--gold2); }
+  .small { font-size: 12px; opacity: .8; }
+
+  /* 莉企ｱ縺ｮ1譫・/ 繧ｯ繧､繧ｺ */
+  #weeklyTitle.quiz { color: #ff6a6a; text-shadow: 0 0 12px rgba(255, 40, 40, .9); }
+  .bubble {
+    position: relative; margin: 0 0 22px; padding: 12px 14px; border-radius: 14px;
+    background: linear-gradient(180deg, #fff, #ffeab0); color: #2a0010; font-weight: 800;
+    border: 3px solid var(--red2); text-align: center; white-space: pre-wrap; font-size: 17px;
+    box-shadow: 0 0 14px rgba(255, 60, 60, .55);
+  }
+  .bubble::after {
+    content: ""; position: absolute; left: 50%; bottom: -17px; margin-left: -14px;
+    border: 14px solid transparent; border-top-color: var(--red2); border-bottom: 0;
+  }
+  #weeklyImg {
+    display: block; width: 100%; border-radius: 12px; border: 2px solid var(--gold2);
+    box-shadow: 0 0 18px rgba(255, 200, 0, .45);
+  }
+  #weeklyCaption { text-align: center; font-size: 12px; margin-top: 6px; opacity: .8; word-break: break-all; }
+
+  /* 繝ｫ繝ｼ繝ｬ繝・ヨ */
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .wheel-wrap { width: min(100%, 78vh, 820px); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; }
+  #info { text-align: center; font-weight: 800; min-height: 3em; text-shadow: 0 0 8px #000; }
+  #status { font-size: 12px; opacity: .8; text-align: center; }
+  #winner {
+    min-height: 92px; width: 100%; text-align: center; white-space: pre-line; font-weight: 900;
+    font-size: clamp(22px, 3.4vw, 36px); padding: 8px 10px; border-radius: 14px;
+    color: #ffe9a0; text-shadow: 0 0 14px rgba(255, 60, 60, .95), 0 2px 0 #5a0010;
+    background: linear-gradient(180deg, rgba(120, 0, 20, .65), rgba(40, 0, 20, .65));
+    border: 1px solid rgba(255, 210, 0, .5);
+  }
+
+  button {
+    font: inherit; font-weight: 900; cursor: pointer; border: 0; border-radius: 12px; padding: 10px 14px;
+    color: #4a0010; background: linear-gradient(180deg, var(--gold1), var(--gold2) 55%, var(--gold3));
+    box-shadow: 0 3px 0 #6b4500, 0 0 12px rgba(255, 210, 0, .45); transition: transform .06s;
+  }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 #6b4500; }
+  button.red { color: #fff4c0; background: linear-gradient(180deg, var(--red1), var(--red2) 55%, var(--red3)); box-shadow: 0 3px 0 #3a0006, 0 0 14px rgba(255, 40, 40, .6); }
+  button.dark { color: #ffe9a0; background: linear-gradient(180deg, #4a1d5e, #260a35); box-shadow: 0 3px 0 #0e0216; }
+  button:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.5); }
+  .attack {
+    width: 100%; font-size: clamp(22px, 3.2vw, 34px); font-style: italic; letter-spacing: .06em; padding: 12px;
+    border-radius: 6px 24px 6px 24px; animation: pulse 1.4s ease-in-out infinite;
+  }
+  .attack:disabled { animation: none; }
+  @keyframes pulse { 50% { box-shadow: 0 3px 0 #3a0006, 0 0 26px rgba(255, 90, 40, .95); } }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .row > button { flex: 1 1 auto; }
+
+  #excludeList {
+    max-height: 210px; overflow: auto; padding: 8px; border-radius: 12px; display: grid; gap: 4px;
+    background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 210, 0, .35);
+  }
+  #excludeList label { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 8px; }
+  #excludeList input { width: 18px; height: 18px; accent-color: #ff3b3b; }
+  #excludeList label:has(input:checked) { background: rgba(255, 40, 40, .3); }
+  #ranking {
+    max-height: 520px; overflow: auto; padding: 8px 10px; border-radius: 12px; font-size: 13px;
+    background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 210, 0, .35); white-space: pre-wrap;
+  }
+  #ranking b { color: var(--gold2); }
+
+  /* 繝｢繝ｼ繝繝ｫ */
+  #overlay {
+    position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
+    background: rgba(5, 0, 10, .78); padding: 16px; backdrop-filter: blur(2px);
+  }
+  #overlay.open { display: flex; }
+  .modal {
+    width: min(94vw, 560px); max-height: 92vh; overflow: auto; text-align: center; padding: 22px 20px;
+    border-radius: 20px; border: 3px solid var(--gold2);
+    background: radial-gradient(circle at 50% 0%, #6e0a24, #2a0838 70%);
+    box-shadow: 0 0 40px rgba(255, 190, 0, .55), inset 0 0 30px rgba(255, 60, 60, .25);
+    animation: pop .25s ease-out;
+  }
+  @keyframes pop { from { transform: scale(.8); opacity: 0; } }
+  .modal .head { font-size: 20px; font-weight: 800; }
+  .modal .big {
+    font-size: clamp(32px, 8vw, 56px); font-weight: 900; margin: 8px 0; color: #fff3a8;
+    text-shadow: 0 0 18px #ff3b3b, 0 3px 0 #6e0008;
+  }
+  .modal .praise { font-size: clamp(40px, 10vw, 72px); color: #ffb13b; }
+  .modal .body { white-space: pre-wrap; margin: 8px 0 14px; }
+  .modal .btns { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 12px; }
+  .modal .btns button { min-width: 130px; font-size: 17px; }
+  .modal.answer {
+    width: min(96vw, 960px); min-height: 70vh; display: flex; flex-direction: column; justify-content: center;
+    background: radial-gradient(circle at 50% 30%, #3a0a52, #0a0214 75%);
+  }
+  .modal.answer img { max-width: 100%; max-height: 42vh; margin: 0 auto 10px; border-radius: 10px; border: 2px solid var(--gold2); }
+  .modal.answer .big { color: #ff6b6b; font-size: clamp(30px, 7vw, 64px); white-space: pre-wrap; }
+  .tabquiz { width: auto; padding: 14px 18px; border-radius: 12px; background: #a8dadc; border: 3px solid #1d3557; box-shadow: 0 0 24px rgba(168, 218, 220, .6); }
+  .tabquiz .row2 { display: flex; align-items: center; gap: 16px; color: #1d3557; font-weight: 900; font-size: 18px; }
+  .tabquiz button { color: #fff; background: #e63946; box-shadow: none; font-size: 20px; padding: 8px 18px; }
+  textarea.msg { width: 100%; height: 180px; border-radius: 10px; padding: 8px; font: inherit; font-size: 13px; color: #170320; }
+
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; }
+    .wheel-wrap { width: min(100%, 96vw); }
+    #weeklyImg { max-height: 360px; object-fit: contain; background: #000; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">FINAL CHANCE</span>
+  <h1>繧ｴ繝滓昏縺ｦ繝ｻ謗・勁蠖鍋分 繝ｫ繝ｼ繝ｬ繝・ヨ</h1>
+</header>
+
+<main>
+  <aside class="panel" id="weeklyPanel">
+    <h2 id="weeklyTitle">莉企ｱ縺ｮ1譫夲ｼ・ｼ・/h2>
+    <div id="weeklyQuiz" class="bubble" hidden></div>
+    <img id="weeklyImg" alt="" hidden>
+    <div id="weeklyCaption"></div>
+  </aside>
+
+  <section class="stage">
+    <div class="wheel-wrap"><canvas id="wheel" width="1000" height="1000" aria-label="繝ｫ繝ｼ繝ｬ繝・ヨ"></canvas></div>
+    <div id="info"></div>
+    <div id="winner"></div>
+    <button id="spinBtn" class="red attack" disabled>ATTACK 竕ｫ</button>
+    <div id="status"></div>
+  </section>
+
+  <aside class="panel">
+    <h2>莉企ｱ繝ｫ繝ｼ繝ｬ繝・ヨ縺九ｉ髯､螟・/h2>
+    <div class="small" style="text-align:center">繝√ぉ繝・け縺励◆莠ｺ縺ｯ繧ｴ繝溘・謗・勁縺ｮ荳｡譁ｹ縺九ｉ螟悶ｌ縺ｾ縺・/div>
+    <div id="excludeList" style="margin-top:10px"></div>
+    <div class="row">
+      <button id="confirmBtn">髯､螟悶ｒ遒ｺ螳壹☆繧具ｼ医％縺ｮ蜀・ｮｹ縺ｧ謚ｽ驕ｸ・・/button>
+    </div>
+    <div class="row">
+      <button id="cancelBtn" class="dark" disabled>遒ｺ螳壹ｒ蜿悶ｊ豸医☆・磯∈縺ｳ逶ｴ縺暦ｼ・/button>
+      <button id="clearBtn" class="dark">髯､螟悶ｒ縺吶∋縺ｦ隗｣髯､</button>
+    </div>
+    <div class="row"><button id="pullBtn" class="dark">繝・・繧ｿ繧呈峩譁ｰ・・it pull・・/button></div>
+    <h2 style="margin-top:16px">蜈ｨ菴灘些髯ｺ蠎ｦ繝ｩ繝ｳ繧ｭ繝ｳ繧ｰ</h2>
+    <div id="ranking"></div>
+  </aside>
+</main>
+
+<div id="overlay"><div class="modal" id="modal"></div></div>
+
+<script>
+(() => {
+  "use strict";
+  const API = "/api";
+  const PENALTY_RATE = 10;
+  const ROUND_CARRY_STEP = 1.0;
+  const ROLE_GOMI = "gomi", ROLE_SOUJI = "souji";
+  const roleName = r => (r === ROLE_GOMI ? "繧ｴ繝滓昏縺ｦ" : "謗・勁");
+  // 繝代メ繝ｳ繧ｳ鬚ｨ縺ｮ驟崎牡・郁ｵ､繝ｻ驥代・逋ｽ繝ｻ鮟偵・讖吶・邏ｫ・・  const SEG = [
+    { a: "#ff4040", b: "#a00010", t: "#fff" },
+    { a: "#fff4b0", b: "#e0a800", t: "#5a0010" },
+    { a: "#ffffff", b: "#c9c9d6", t: "#6e0008" },
+    { a: "#3a3a4a", b: "#0c0c14", t: "#ffe27a" },
+    { a: "#ffb347", b: "#e06a00", t: "#3a0010" },
+    { a: "#c85bff", b: "#5a0a8a", t: "#fff" },
+  ];
+
+  const $ = id => document.getElementById(id);
+  const canvas = $("wheel"), ctx = canvas.getContext("2d");
+
+  // ---------- 迥ｶ諷具ｼ・oulette.py 縺ｨ蜷後§縺上そ繝・す繝ｧ繝ｳ邨ゆｺ・∪縺ｧ繝｡繝｢繝ｪ縺ｮ縺ｿ・・----------
+  let members = [], hist = {};
+  let doneGomi = [], doneSouji = [], lastG = null, lastS = null, wG = {}, wS = {};
+  let prevUnfinished = new Set();
+  let candG = [], candS = [], candidates = [];
+  let weeklyExcluded = new Set();
+  let confirmed = false, drawRole = ROLE_GOMI, sessionG = null;
+  let angle = 0, speed = 0, spinning = false, stopping = false;
+  let busy = true, finished = false, weekly = null;
+
+  const key = (role, m) => role + "\u0000" + m;
+
+  // ---------- 繝｢繝ｼ繝繝ｫ ----------
+  function modal(html, buttons, cls = "") {
+    return new Promise(resolve => {
+      const box = $("modal");
+      box.className = "modal " + cls;
+      box.innerHTML = html + '<div class="btns"></div>';
+      const bar = box.querySelector(".btns");
+      buttons.forEach(b => {
+        const el = document.createElement("button");
+        el.textContent = b.label;
+        if (b.cls) el.className = b.cls;
+        el.onclick = () => { $("overlay").classList.remove("open"); resolve(b.value); };
+        bar.appendChild(el);
+      });
+      $("overlay").classList.add("open");
+      const first = bar.querySelector("button");
+      if (first) first.focus();
+    });
+  }
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const info = (title, text) => modal(`<div class="head">${esc(title)}</div><div class="body">${esc(text)}</div>`, [{ label: "OK", value: true }]);
+
+  // ---------- roulette.py 縺ｮ遘ｻ讀・----------
+  function migrateLegacy(d) {
+    if (!("done_gomi" in d) && "done_members" in d) { d.done_gomi = [...d.done_members]; d.done_souji = []; }
+    if (!("done_gomi" in d)) d.done_gomi = [];
+    if (!("done_souji" in d)) d.done_souji = [];
+    if (!("last_gomi_winner" in d) && "last_winner" in d) { d.last_gomi_winner = d.last_winner; d.last_souji_winner = d.last_winner; }
+    if (!("last_gomi_winner" in d)) d.last_gomi_winner = null;
+    if (!("last_souji_winner" in d)) d.last_souji_winner = null;
+    const ow = d.weights || {};
+    if (!("weights_gomi" in d)) d.weights_gomi = { ...ow };
+    if (!("weights_souji" in d)) d.weights_souji = { ...ow };
+    if (!("pair_pending_souji" in d)) d.pair_pending_souji = false;
+    if (!("pair_session_excluded" in d)) d.pair_session_excluded = [];
+  }
+
+  function computePools() {
+    const dg = new Set(doneGomi), ds = new Set(doneSouji);
+    const pen = w => new Set(Object.entries(w || {}).filter(([, v]) => v > 1.0).map(([k]) => k));
+    const pg = pen(wG), ps = pen(wS);
+    const neither = members.filter(m => !dg.has(m) && !ds.has(m));
+    const gp = [...neither], sp = [...neither];
+    members.forEach(m => {
+      if (pg.has(m) && !gp.includes(m)) gp.push(m);
+      if (ps.has(m) && !sp.includes(m)) sp.push(m);
+    });
+    candG = gp; candS = sp;
+    candidates = [...new Set([...gp, ...sp])].sort((a, b) => members.indexOf(a) - members.indexOf(b));
+  }
+
+  function roleWeights(role) {
+    const primary = role === ROLE_GOMI ? wG : wS;
+    const secondary = role === ROLE_GOMI ? wS : wG;
+    const secRole = role === ROLE_GOMI ? ROLE_SOUJI : ROLE_GOMI;
+    const merged = { ...primary };
+    for (const [m, w] of Object.entries(secondary)) {
+      if ((w > 1.0 && w < PENALTY_RATE) || (w > PENALTY_RATE && prevUnfinished.has(key(secRole, m)))) {
+        merged[m] = Math.max(merged[m] ?? 1.0, w);
+      }
+    }
+    return merged;
+  }
+  const roleCandidates = role => (role === ROLE_GOMI ? candG : candS);
+
+  function activePool() {
+    let pool = roleCandidates(drawRole).filter(m => !weeklyExcluded.has(m));
+    if (drawRole === ROLE_SOUJI && sessionG) pool = pool.filter(m => m !== sessionG);
+    return pool;
+  }
+  function wheelOrder() {
+    const wm = roleWeights(drawRole);
+    return activePool().sort((a, b) => (wm[b] ?? 1) - (wm[a] ?? 1));
+  }
+
+  function canRunBoth() {
+    const ga = candG.filter(m => !weeklyExcluded.has(m));
+    const sa = candS.filter(m => !weeklyExcluded.has(m));
+    if (!ga.length || !sa.length) return [false, "繧ｴ繝溘∪縺溘・謗・勁縺ｮ蛟呵｣懊′縺・∪縺帙ｓ縲る勁螟悶ｒ貂帙ｉ縺励※縺上□縺輔＞縲・];
+    for (const g of ga) {
+      if (!sa.filter(m => m !== g).length) {
+        return [false, "縺ｩ縺ｮ邨・∩蜷医ｏ縺帙〒繧よ祉髯､蠖鍋分縺梧ｱｺ繧√ｉ繧後∪縺帙ｓ縲・n・域祉髯､蛟呵｣懊′繧ｴ繝溷ｽ馴∈閠・＠縺九＞縺ｪ縺・憾諷九↓縺ｪ繧雁ｾ励∪縺呻ｼ噂n髯､螟悶∪縺溘・蜷咲ｰｿ繧定ｦ狗峩縺励※縺上□縺輔＞縲・];
+      }
+    }
+    return [true, ""];
+  }
+
+  async function checkPrevious(role) {
+    const last = role === ROLE_GOMI ? lastG : lastS;
+    const done = role === ROLE_GOMI ? doneGomi : doneSouji;
+    if (!last || done.includes(last)) return;
+    const duty = roleName(role);
+    const extraLabel = role === ROLE_GOMI ? "繧ｴ繝溯｢九ｒ譖ｿ縺医◆" : "謗・勁讖溘・荳ｭ霄ｫ繧呈昏縺ｦ縺・;
+    const r = await modal(
+      `<div class="head">蜑榊屓縺ｮ${duty}蠖鍋分縺ｯ縲・${esc(last)} 縲代＆繧薙〒縺励◆縲・/div><div class="head" style="margin-top:8px">莉ｻ蜍呻ｼ・{duty}・峨・螳御ｺ・＠縺ｾ縺励◆縺具ｼ・/div>`,
+      [{ label: "縺ｯ縺・ｼ亥ｮ御ｺ・＠縺滂ｼ・, value: "yes" }, { label: "縺・＞縺茨ｼ医∪縺・・, value: "no", cls: "red" }, { label: extraLabel, value: "extra", cls: "dark" }]);
+    const wmap = role === ROLE_GOMI ? wG : wS;
+    if (r === "yes" || r === "extra") {
+      done.push(last);
+      delete wmap[last];
+      if (r === "yes") await info("遒ｺ隱・, `${duty}蠖鍋分繧貞ｮ御ｺ・Μ繧ｹ繝医↓蜉縺医∪縺励◆縲Ａ);
+      else await modal(`<div class="big praise">縺医ｉ縺・ｼ・ｼ・/div><div class="big" style="font-size:30px">縲・${esc(last)} 縲代＆繧・/div><div class="head">${esc(extraLabel)}</div>`, [{ label: "OK", value: true }]);
+    } else {
+      wmap[last] = Math.max(wmap[last] ?? 1.0, PENALTY_RATE);
+      prevUnfinished.add(key(role, last));
+      await info("譛ｪ螳御ｺ・, `${last}縺輔ｓ縺ｮ${duty}蠖鍋分・壻ｻ企ｱ縺ｮ蠖馴∈蛟咲紫繧・{PENALTY_RATE}蛟阪↓縺励∪縺吶・n谺｡縺ｮ蜻ｨ縺ｫ蜈･繧九→縺阪・縲∵戟縺｡雜翫＠蛻・→縺励※+100%縺ｫ螟画鋤縺励∪縺吶Ａ);
+    }
+  }
+
+  function carryOnlyUnfinishedPenalties() {
+    const dG = new Set(doneGomi), dS = new Set(doneSouji), ms = new Set(members);
+    const carry = (role, m, w, doneSet) => {
+      if (!ms.has(m)) return null;
+      if (prevUnfinished.has(key(role, m))) return Math.max(w, PENALTY_RATE) + ROUND_CARRY_STEP;
+      if (w >= PENALTY_RATE) return (w - (PENALTY_RATE - 1)) + ROUND_CARRY_STEP;
+      if (doneSet.has(m)) return null;
+      return w;
+    };
+    const conv = (o, role, doneSet) => {
+      const out = {};
+      for (const [m, w] of Object.entries(o)) { const c = carry(role, m, w, doneSet); if (c !== null) out[m] = c; }
+      return out;
+    };
+    wG = conv(wG, ROLE_GOMI, dG);
+    wS = conv(wS, ROLE_SOUJI, dS);
+  }
+
+  async function checkCycleReset() {
+    const assigned = new Set([...doneGomi, ...doneSouji]);
+    if (lastG) assigned.add(lastG);
+    if (lastS) assigned.add(lastS);
+    if (!members.length || !members.every(m => assigned.has(m))) return;
+    if (lastG && lastS && prevUnfinished.size >= 2) {
+      await info("譛ｪ螳滓命縺ゅｊ", "蜑榊屓縺ｮ繧ｴ繝滓昏縺ｦ繝ｻ謗・勁縺後←縺｡繧峨ｂ譛ｪ螳滓命縺ｧ縺励◆縲・n2莠ｺ繧呈ｮ九＠縺ｦ縲∽ｻ翫・蜻ｨ縺ｮ縺ｾ縺ｾ邯壹￠縺ｾ縺吶・);
+      return;
+    }
+    carryOnlyUnfinishedPenalties();
+    await info("逾晢ｼ∽ｸ蜻ｨ螳御ｺ・, "蜈ｨ蜩｡縺御ｸ蠎ｦ縺壹▽蠖鍋分縺ｫ蜑ｲ繧雁ｽ薙※繧峨ｌ縺ｾ縺励◆・―n蜑榊屓蛻・・遒ｺ隱阪ｒ蜿肴丐縺励※縲∵眠縺励＞蜻ｨ繧帝幕蟋九＠縺ｾ縺吶・n譛ｪ螳滓命縺ｮ蠖鍋分縺後≠繧倶ｺｺ縺ｯ縲∝咲紫繧｢繝・・縺ｮ縺ｾ縺ｾ谺｡縺ｮ繝ｫ繝ｼ繝ｬ繝・ヨ縺ｫ谿九ｊ縺ｾ縺吶・);
+    doneGomi = []; doneSouji = [];
+    lastG = ""; lastS = "";
+  }
+
+  function applyExclusionBonus() {
+    for (const role of [ROLE_GOMI, ROLE_SOUJI]) {
+      const base = roleCandidates(role);
+      const wm = roleWeights(role);
+      const target = role === ROLE_GOMI ? wG : wS;
+      const total = base.reduce((s, m) => s + (wm[m] ?? 1), 0);
+      weeklyExcluded.forEach(m => {
+        const w = wm[m] ?? 1;
+        if (total > 0) target[m] = (target[m] ?? 1) * (1 + w / total);
+      });
+    }
+  }
+
+  // ---------- 蜿ｳ繝代ロ繝ｫ ----------
+  function rankingBlock(role, exclude) {
+    const wm = roleWeights(role);
+    const pool = new Set(roleCandidates(role));
+    const sorted = [...members].sort((a, b) => (wm[b] ?? 1) - (wm[a] ?? 1));
+    const total = [...pool].reduce((s, m) => s + (wm[m] ?? 1), 0);
+    let out = "";
+    sorted.forEach((m, i) => {
+      const w = wm[m] ?? 1;
+      const prob = pool.has(m) && total > 0 ? (w / total) * 100 : 0;
+      let st;
+      if (weeklyExcluded.has(m)) st = "莉企ｱ髯､螟・;
+      else if (exclude.has(m)) st = "莉雁屓縺ｮ繧ｴ繝溷ｽ鍋分";
+      else if (!pool.has(m)) st = (role === ROLE_GOMI ? "謗・勁" : "繧ｴ繝・) + "繝壹リ繝ｫ繝・ぅ蟇ｾ雎｡";
+      else if (doneGomi.includes(m) || doneSouji.includes(m)) st = "莉雁捉螳御ｺ・ｸ医∩";
+      else st = "謚ｽ驕ｸ蟇ｾ雎｡";
+      out += `${i === 0 ? "荘" : (i + 1) + "."} <b>${esc(m)}</b>\n`;
+      out += `    蛟咲紫: ${w.toFixed(2)}蛟・/ 蠖鍋分逶ｮ螳・ ${pool.has(m) ? prob.toFixed(1) + "%" : "-"} / ${st}\n\n`;
+    });
+    return out;
+  }
+  function renderRanking() {
+    let h = "";
+    if (!confirmed) {
+      h += "縲皮｢ｺ螳壼燕・壼・蜩｡蛻・ｒ陦ｨ遉ｺ縲表n1蝗樒岼・昴ざ繝滂ｼ・蝗樒岼・晄祉髯､縺ｧ縺吶・n\n笏笏 繧ｴ繝滓昏縺ｦ蠖鍋分 笏笏\n\n" + rankingBlock(ROLE_GOMI, new Set());
+      h += "笏笏 謗・勁蠖鍋分 笏笏\n\n" + rankingBlock(ROLE_SOUJI, sessionG ? new Set([sessionG]) : new Set());
+    } else {
+      const ex = drawRole === ROLE_SOUJI && sessionG ? new Set([sessionG]) : new Set();
+      h += `縲・{roleName(drawRole)}蠖鍋分繝ｻ蜈ｨ菴薙Λ繝ｳ繧ｭ繝ｳ繧ｰ縲表n\n` + rankingBlock(drawRole, ex);
+    }
+    $("ranking").innerHTML = h;
+  }
+  function renderExclude() {
+    const box = $("excludeList");
+    box.innerHTML = "";
+    candidates.forEach(m => {
+      const l = document.createElement("label");
+      const c = document.createElement("input");
+      c.type = "checkbox"; c.checked = weeklyExcluded.has(m); c.disabled = confirmed || busy;
+      c.onchange = () => { c.checked ? weeklyExcluded.add(m) : weeklyExcluded.delete(m); renderAll(); };
+      l.append(c, document.createTextNode(m));
+      box.appendChild(l);
+    });
+    if (!candidates.length) box.textContent = "蛟呵｣懊′縺・∪縺帙ｓ縲・;
+  }
+  function renderInfo() {
+    $("info").textContent = confirmed
+      ? (drawRole === ROLE_GOMI ? "縲・蝗樒岼繝ｻ繧ｴ繝滓昏縺ｦ蠖鍋分縲措Space] / 繝懊ち繝ｳ縺ｧ繧ｹ繧ｿ繝ｼ繝医・繧ｹ繝医ャ繝・ : "縲・蝗樒岼繝ｻ謗・勁蠖鍋分縲措Space] / 繝懊ち繝ｳ縺ｧ繧ｹ繧ｿ繝ｼ繝医・繧ｹ繝医ャ繝・)
+      : "縺ｾ縺壹碁勁螟悶ｒ遒ｺ螳壹☆繧九阪ｒ謚ｼ縺励※縺九ｉ謚ｽ驕ｸ縺ｧ縺阪∪縺吶・n・・蝗樒岼・壹ざ繝滓昏縺ｦ 竊・2蝗樒岼・壽祉髯､・噂n窶ｻ騾比ｸｭ縺ｧ髢峨§縺溷ｴ蜷医・謚ｽ驕ｸ縺ｯ辟｡蜉ｹ縲よｬ｡蝗槭・譛蛻昴°繧峨ｄ繧顔峩縺励〒縺吶・;
+    $("info").style.whiteSpace = "pre-line";
+    $("status").textContent = `邱上Γ繝ｳ繝舌・: ${members.length}莠ｺ / 繧ｴ繝滓ｮ九ｊ: ${candG.length} / 謗・勁谿九ｊ: ${candS.length}`;
+  }
+  function renderButtons() {
+    $("confirmBtn").disabled = confirmed || busy || finished;
+    $("cancelBtn").disabled = !confirmed || spinning || busy || finished;
+    $("clearBtn").disabled = spinning || busy || finished;
+    $("spinBtn").disabled = !confirmed || busy || finished;
+    $("spinBtn").textContent = spinning ? "STOP 笆" : "ATTACK 竕ｫ";
+  }
+  function renderAll() { renderExclude(); renderInfo(); renderRanking(); renderButtons(); }
+
+  // ---------- 莉企ｱ縺ｮ1譫・/ 繧ｯ繧､繧ｺ ----------
+  function renderWeekly() {
+    const w = weekly, t = $("weeklyTitle"), q = $("weeklyQuiz"), img = $("weeklyImg");
+    const hasQuiz = !!(w && w.quiz_question);
+    t.textContent = hasQuiz ? "莉企ｱ縺ｮ繧ｯ繧､繧ｺ・・ｼ・ : "莉企ｱ縺ｮ1譫夲ｼ・ｼ・;
+    t.classList.toggle("quiz", hasQuiz);
+    q.hidden = !hasQuiz;
+    if (hasQuiz) q.textContent = w.quiz_question;
+    if (w && w.photos && w.photos.length) {
+      const src = w.photos[Math.floor(Math.random() * w.photos.length)];
+      img.src = src; img.hidden = false;
+      const name = decodeURIComponent(src.split("/").pop()).replace(/\.[^.]+$/, "");
+      $("weeklyCaption").textContent = hasQuiz ? "遲斐∴縺ｯ莉企ｱ縺ｮ謚ｽ驕ｸ縺後☆縺ｹ縺ｦ邨ゅｏ縺｣縺溘≠縺ｨ縺ｫ陦ｨ遉ｺ縺励∪縺吶・ : name;
+    } else {
+      img.hidden = true;
+      $("weeklyCaption").textContent = hasQuiz ? "遲斐∴縺ｯ莉企ｱ縺ｮ謚ｽ驕ｸ縺後☆縺ｹ縺ｦ邨ゅｏ縺｣縺溘≠縺ｨ縺ｫ陦ｨ遉ｺ縺励∪縺吶・
+        : (w && w.week_folder ? "逕ｻ蜒上′縺ゅｊ縺ｾ縺帙ｓ" : "逕ｻ蜒上ヵ繧ｩ繝ｫ繝縺後≠繧翫∪縺帙ｓ");
+    }
+  }
+
+  // ---------- 繝ｫ繝ｼ繝ｬ繝・ヨ謠冗判・医ヱ繝√Φ繧ｳ鬚ｨ・・----------
+  function drawWheel(ts) {
+    const W = canvas.width, cx = W / 2, cy = W / 2;
+    const R = W / 2 - 6;               // 螟匁棧縺ｮ螟門捉
+    const rWheel = R * 0.80;           // 逶､髱｢蜊雁ｾ・    ctx.clearRect(0, 0, W, W);
+
+    // 螟匁棧・磯≡竊定ｵ､竊帝≡・・    const ring = (r0, r1, stops) => {
+      const g = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+      stops.forEach(([p, c]) => g.addColorStop(p, c));
+      ctx.beginPath(); ctx.arc(cx, cy, r1, 0, Math.PI * 2); ctx.arc(cx, cy, r0, 0, Math.PI * 2, true);
+      ctx.fillStyle = g; ctx.fill();
+    };
+    ctx.save();
+    ctx.shadowColor = "rgba(255,60,40,.8)"; ctx.shadowBlur = 40;
+    ring(R * 0.90, R, [[0, "#8a5a00"], [.25, "#fff3a8"], [.5, "#d79a00"], [.8, "#fff0a0"], [1, "#7a4a00"]]);
+    ctx.restore();
+    ring(R * 0.82, R * 0.90, [[0, "#5a0008"], [.3, "#e0101a"], [.6, "#ff5a4a"], [1, "#7a0010"]]);
+
+    // 髮ｻ鬟ｾ・医■縺九■縺具ｼ・    const n = 36, t = (ts || 0) / 1000;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, rr = R * 0.86;
+      const on = ((i + Math.floor(t * (spinning ? 14 : 4))) % 2 === 0);
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      ctx.beginPath(); ctx.arc(x, y, R * 0.02, 0, Math.PI * 2);
+      ctx.fillStyle = on ? "#fffbd0" : "#a06a00";
+      if (on) { ctx.shadowColor = "#ffe27a"; ctx.shadowBlur = 18; } else { ctx.shadowBlur = 0; }
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+    // 蜀・・縺ｮ鮟・牡縺・Μ繝ｳ繧ｰ
+    ring(rWheel, R * 0.815, [[0, "#fff6b0"], [.5, "#ffd000"], [1, "#a06a00"]]);
+
+    // 逶､髱｢縺ｮ荳句慍
+    ctx.beginPath(); ctx.arc(cx, cy, rWheel, 0, Math.PI * 2);
+    ctx.fillStyle = "#12031d"; ctx.fill();
+
+    const order = wheelOrder();
+    if (!candidates.length || !order.length) {
+      ctx.fillStyle = "#ffe27a"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `900 ${W * 0.05}px sans-serif`;
+      ctx.fillText(!candidates.length ? "No Candidates" : "蜈ｨ蜩｡髯､螟紋ｸｭ", cx, cy - W * 0.02);
+      if (candidates.length) { ctx.font = `700 ${W * 0.03}px sans-serif`; ctx.fillText("繝ｪ繧ｹ繝医〒隱ｿ謨ｴ縺励※縺上□縺輔＞", cx, cy + W * 0.04); }
+      return;
+    }
+    const wm = roleWeights(drawRole);
+    const total = order.reduce((s, m) => s + (wm[m] ?? 1), 0);
+    let start = 0; // 蠎ｦ・亥渚譎りｨ亥屓繧翫∝承縺・縲Ｓoulette.py 縺ｨ蜷後§・・    order.forEach((m, i) => {
+      const w = wm[m] ?? 1, ext = (w / total) * 360, c = SEG[i % SEG.length];
+      const a0 = -start * Math.PI / 180, a1 = -(start + ext) * Math.PI / 180;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, rWheel, a0, a1, true); ctx.closePath();
+      const g = ctx.createRadialGradient(cx, cy, rWheel * 0.15, cx, cy, rWheel);
+      g.addColorStop(0, c.b); g.addColorStop(.75, c.a); g.addColorStop(1, c.b);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = "#ffe27a"; ctx.lineWidth = W * 0.004; ctx.stroke();
+
+      // 蜷榊燕
+      const mid = (start + ext / 2) * Math.PI / 180, ang = -mid;
+      const px = cx + Math.cos(ang) * rWheel * 0.62, py = cy + Math.sin(ang) * rWheel * 0.62;
+      const arc = ext * Math.PI / 180 * rWheel * 0.62;
+      const fs = Math.max(Math.min(W * 0.05, arc * 0.42, rWheel * 0.11), W * 0.02);
+      ctx.save(); ctx.translate(px, py);
+      let rot = ang; if (Math.cos(ang) < 0) rot += Math.PI; // 蟾ｦ蛛ｴ縺ｯ蜿崎ｻ｢縺励※隱ｭ繧√ｋ繧医≧縺ｫ
+      ctx.rotate(rot);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `900 ${fs}px "Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif`;
+      ctx.lineJoin = "round"; ctx.lineWidth = fs * 0.2;
+      ctx.strokeStyle = c.t === "#fff" || c.t === "#ffe27a" ? "rgba(0,0,0,.65)" : "rgba(255,255,255,.7)";
+      ctx.strokeText(m, 0, -fs * 0.28); ctx.fillStyle = c.t; ctx.fillText(m, 0, -fs * 0.28);
+      ctx.font = `800 ${fs * 0.55}px sans-serif`; ctx.lineWidth = fs * 0.12;
+      const lab = `x${w.toFixed(1)}`;
+      ctx.strokeText(lab, 0, fs * 0.55); ctx.fillText(lab, 0, fs * 0.55);
+      ctx.restore();
+      start += ext;
+    });
+
+    // 蜈画ｲ｢
+    const gl = ctx.createRadialGradient(cx - rWheel * .3, cy - rWheel * .4, rWheel * .1, cx, cy, rWheel);
+    gl.addColorStop(0, "rgba(255,255,255,.28)"); gl.addColorStop(.4, "rgba(255,255,255,.05)"); gl.addColorStop(1, "rgba(0,0,0,.25)");
+    ctx.beginPath(); ctx.arc(cx, cy, rWheel, 0, Math.PI * 2); ctx.fillStyle = gl; ctx.fill();
+
+    // 驥晢ｼ磯≡縺ｮ繧｢繝ｭ繝ｼ・・    const rad = -angle * Math.PI / 180;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(rad);
+    const L = rWheel * 0.96, bw = rWheel * 0.07;
+    ctx.shadowColor = "rgba(255,230,120,.95)"; ctx.shadowBlur = spinning ? 36 : 18;
+    const ng = ctx.createLinearGradient(0, -bw, 0, bw);
+    ng.addColorStop(0, "#fff7c0"); ng.addColorStop(.5, "#f5b800"); ng.addColorStop(1, "#8a5a00");
+    ctx.beginPath();
+    ctx.moveTo(L, 0); ctx.lineTo(L - bw * 2.2, -bw * 1.4); ctx.lineTo(L - bw * 1.6, -bw * .35);
+    ctx.lineTo(0, -bw * .35); ctx.lineTo(0, bw * .35); ctx.lineTo(L - bw * 1.6, bw * .35); ctx.lineTo(L - bw * 2.2, bw * 1.4);
+    ctx.closePath(); ctx.fillStyle = ng; ctx.fill();
+    ctx.lineWidth = W * 0.004; ctx.strokeStyle = "#5a0010"; ctx.stroke();
+    ctx.restore();
+
+    // 繝上ヶ・・INAL鬚ｨ繝｡繝繝ｫ・・    const hr = rWheel * 0.17;
+    const hg = ctx.createRadialGradient(cx - hr * .3, cy - hr * .4, hr * .1, cx, cy, hr);
+    hg.addColorStop(0, "#fff7c0"); hg.addColorStop(.55, "#f2b800"); hg.addColorStop(1, "#7a4a00");
+    ctx.beginPath(); ctx.arc(cx, cy, hr, 0, Math.PI * 2); ctx.fillStyle = hg; ctx.fill();
+    ctx.lineWidth = hr * .12; ctx.strokeStyle = "#c40a14"; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, hr * .66, 0, Math.PI * 2);
+    const hg2 = ctx.createRadialGradient(cx, cy - hr * .3, hr * .1, cx, cy, hr * .66);
+    hg2.addColorStop(0, "#ff6a5a"); hg2.addColorStop(1, "#8a0010");
+    ctx.fillStyle = hg2; ctx.fill();
+    ctx.fillStyle = "#fff6c0"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `900 italic ${hr * .5}px sans-serif`;
+    ctx.fillText(drawRole === ROLE_GOMI ? "繧ｴ繝・ : "謗・勁", cx, cy);
+  }
+
+  // ---------- 謚ｽ驕ｸ ----------
+  function startSpin() {
+    spinning = true; stopping = false;
+    speed = 25 + Math.random() * 15;
+    $("winner").textContent = `謚ｽ驕ｸ荳ｭ窶ｦ・・{roleName(drawRole)}蠖鍋分・荏;
+    renderButtons();
+  }
+  async function toggleSpin() {
+    if (busy || finished) return;
+    if (!spinning) {
+      if (!confirmed) { clearExclusions(); return; }
+      if (!activePool().length) { await info("謚ｽ驕ｸ荳榊庄", "蜿ょ刈縺吶ｋ莠ｺ縺後＞縺ｾ縺帙ｓ縲る勁螟悶Μ繧ｹ繝医ｒ遒ｺ隱阪＠縺ｦ縺上□縺輔＞縲・); return; }
+      startSpin();
+    } else if (!stopping) {
+      stopping = true;
+    }
+  }
+  let acc = 0, lastTs = 0;
+  function loop(ts) {
+    if (!lastTs) lastTs = ts;
+    acc += Math.min(ts - lastTs, 200); lastTs = ts;
+    while (acc >= 20) {
+      acc -= 20;
+      if (spinning) {
+        angle = (angle + speed) % 360;
+        if (stopping) {
+          speed *= 0.96;
+          if (speed < 0.15) { speed = 0; spinning = false; stopping = false; determineWinner(); }
+        }
+      }
+    }
+    drawWheel(ts);
+    requestAnimationFrame(loop);
+  }
+
+  async function determineWinner() {
+    const order = wheelOrder();
+    if (!order.length) return;
+    busy = true; renderButtons();
+    const wm = roleWeights(drawRole);
+    const total = order.reduce((s, m) => s + (wm[m] ?? 1), 0);
+    let cum = 0, winner = order[order.length - 1];
+    for (const m of order) {
+      const ext = ((wm[m] ?? 1) / total) * 360;
+      if (cum <= angle && angle < cum + ext) { winner = m; break; }
+      cum += ext;
+    }
+    const rate = ((wm[winner] ?? 1) / total) * 100;
+    const role = drawRole;
+    const winDlg = () => modal(
+      `<div class="head">莉企ｱ縺ｮ${role === ROLE_GOMI ? "繧ｴ繝滓昏縺ｦ" : "謗・勁"}蠖鍋分縺ｯ</div><div class="big">縲・${esc(winner)} 縲・/div><div class="head">縺輔ｓ縺ｧ縺呻ｼ・/div><div class="body" style="margin-top:12px">縺薙・謚ｽ驕ｸ縺ｧ縺ｮ蠖馴∈遒ｺ邇・ｼ・{rate.toFixed(1)}%</div>`,
+      [{ label: "OK", value: true, cls: "red" }]);
+
+    if (role === ROLE_GOMI) {
+      sessionG = winner;
+      $("winner").textContent = `繧ｴ繝滓昏縺ｦ蠖鍋分 豎ｺ螳喀n縲・${winner} 縲代＆繧難ｼ医％縺ｮ謚ｽ驕ｸ ${rate.toFixed(1)}%・噂n\n邯壹￠縺ｦ謗・勁蠖鍋分繧呈歓驕ｸ\n・遺ｻ謗・勁縺ｾ縺ｧ邨ゅ∴繧九∪縺ｧ菫晏ｭ倥＆繧後∪縺帙ｓ・荏;
+      await winDlg();
+      drawRole = ROLE_SOUJI;
+      computePools(); busy = false; renderAll();
+    } else {
+      applyExclusionBonus();
+      lastG = sessionG; lastS = winner;
+      $("winner").textContent = `繧ｴ繝滓昏縺ｦ・壹・${sessionG} 縲代＆繧貼n謗・勁・壹・${winner} 縲代＆繧貼n・域祉髯､縺ｮ蠖馴∈遒ｺ邇・${rate.toFixed(1)}%・荏;
+      await winDlg();
+      sessionG = null; drawRole = ROLE_GOMI; weeklyExcluded.clear(); confirmed = false;
+      computePools(); renderAll();
+      await afterFullSession();
+    }
+  }
+
+  // ---------- 繧ｯ繧､繧ｺ遲斐∴ 竊・菫晏ｭ・----------
+  async function afterFullSession() {
+    let ans = null;
+    try { ans = await (await fetch(API + "/quiz-answer", { cache: "no-store" })).json(); } catch (e) { /* 遲斐∴縺ｪ縺玲桶縺・*/ }
+    if (ans && ans.answer) {
+      await modal(`<div class="row2">莉企ｱ縺ｮ繧ｯ繧､繧ｺ縲遲斐∴縺ｯ縺薙■繧・/div>`, [{ label: "騾ｲ", value: true }], "tabquiz");
+      const img = ans.image ? `<img src="${ans.image}" alt="">` : "";
+      await modal(`<div class="head" style="color:#a8dadc;font-size:34px">遲斐∴</div>${img}<div class="big">${esc(ans.answer)}</div>`,
+        [{ label: "OK", value: true, cls: "red" }], "answer");
+    } else {
+      await modal(`<div class="head">莉企ｱ縺ｮ蠖鍋分繧剃ｿ晏ｭ倥＠縺ｾ縺吶・/div><div class="body">OK繧呈款縺吶→螻･豁ｴ縺ｨ騾｣邨｡譁・ｒ菫晏ｭ倥＠縺ｾ縺吶・/div>`, [{ label: "OK", value: true, cls: "red" }]);
+    }
+    await persistSessionEnd();
+  }
+
+  function snapshotHistory() {
+    const d = hist;
+    d.done_gomi = doneGomi; d.done_souji = doneSouji;
+    d.last_gomi_winner = lastG; d.last_souji_winner = lastS;
+    d.weights_gomi = wG; d.weights_souji = wS;
+    d.pair_pending_souji = false; d.pair_session_excluded = [];
+    const p = n => String(n).padStart(2, "0"), now = new Date();
+    d.session_close_snapshot = {
+      saved_at: `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`,
+      done_gomi: [...doneGomi], done_souji: [...doneSouji],
+      this_week_gomi_winner: lastG, this_week_souji_winner: lastS,
+    };
+    return d;
+  }
+
+  async function persistSessionEnd() {
+    let res;
+    try {
+      res = await (await fetch(API + "/session-end", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ history: snapshotHistory() }),
+      })).json();
+    } catch (e) {
+      await info("菫晏ｭ倥〒縺阪∪縺帙ｓ縺ｧ縺励◆", "繧ｵ繝ｼ繝舌・縺ｫ謗･邯壹〒縺阪∪縺帙ｓ縲ゅｂ縺・ｸ蠎ｦ縺願ｩｦ縺励￥縺縺輔＞縲・);
+      return persistSessionEnd();
+    }
+    finished = true; busy = false; renderAll();
+    $("info").textContent = "莉企ｱ縺ｮ蠖鍋分繧剃ｿ晏ｭ倥＠縺ｾ縺励◆縲ゅ♀逍ｲ繧後＆縺ｾ縺ｧ縺励◆・・;
+    await modal(
+      `<div class="head">螻･豁ｴ縺ｨ騾｣邨｡譁・ｒ菫晏ｭ倥＠縺ｾ縺励◆</div><div class="body">Teams縺ｫ雋ｼ繧矩｣邨｡譁・ｼ・/div><textarea class="msg" readonly>${esc(res.message)}</textarea>`,
+      [{ label: "騾｣邨｡譁・ｒ繧ｳ繝斐・", value: "copy" }, { label: "髢峨§繧・, value: "close", cls: "dark" }]
+    ).then(async v => {
+      if (v === "copy") {
+        try { await navigator.clipboard.writeText(res.message); } catch (e) {
+          const ta = document.createElement("textarea"); ta.value = res.message; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+        }
+        await info("繧ｳ繝斐・縺励∪縺励◆", "騾｣邨｡譁・ｒ繧ｯ繝ｪ繝・・繝懊・繝峨↓繧ｳ繝斐・縺励∪縺励◆縲・);
+      }
+    });
+  }
+
+  // ---------- 謫堺ｽ・----------
+  function confirmExclusions() {
+    const [ok, err] = canRunBoth();
+    if (!ok) { info("遒ｺ螳壹〒縺阪∪縺帙ｓ", err); return; }
+    confirmed = true; drawRole = ROLE_GOMI; sessionG = null;
+    renderAll();
+  }
+  function cancelConfirm() { confirmed = false; drawRole = ROLE_GOMI; sessionG = null; renderAll(); }
+  function clearExclusions() { weeklyExcluded.clear(); cancelConfirm(); }
+
+  $("confirmBtn").onclick = confirmExclusions;
+  $("cancelBtn").onclick = cancelConfirm;
+  $("clearBtn").onclick = clearExclusions;
+  $("spinBtn").onclick = toggleSpin;
+  $("pullBtn").onclick = async () => {
+    try {
+      const r = await (await fetch(API + "/pull", { method: "POST" })).json();
+      if (r.ok) { await info("繝・・繧ｿ譖ｴ譁ｰ", "git pull 縺悟ｮ御ｺ・＠縺ｾ縺励◆縲ゅ・繝ｼ繧ｸ繧貞・隱ｭ縺ｿ霎ｼ縺ｿ縺励∪縺吶・); location.reload(); }
+      else info("繝・・繧ｿ譖ｴ譁ｰ", "git pull 縺ｫ螟ｱ謨励＠縺ｾ縺励◆縲・n\n" + (r.error || ""));
+    } catch (e) { info("繝・・繧ｿ譖ｴ譁ｰ", "繧ｵ繝ｼ繝舌・縺ｫ謗･邯壹〒縺阪∪縺帙ｓ縲・); }
+  };
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space" && !$("overlay").classList.contains("open") && !/^(INPUT|TEXTAREA|BUTTON)$/.test(document.activeElement.tagName)) {
+      e.preventDefault(); toggleSpin();
+    }
+  });
+
+  // ---------- 襍ｷ蜍・----------
+  async function init() {
+    requestAnimationFrame(loop);
+    let data;
+    try { data = await (await fetch(API + "/data", { cache: "no-store" })).json(); }
+    catch (e) { $("winner").textContent = "繧ｵ繝ｼ繝舌・縺九ｉ繝・・繧ｿ繧貞叙蠕励〒縺阪∪縺帙ｓ縺ｧ縺励◆縲・; return; }
+    weekly = data; members = data.members; hist = data.history || {};
+    migrateLegacy(hist);
+    // 謗・勁縺ｾ縺ｧ邨ゅｏ繧峨★邨ゆｺ・＠縺ｦ縺・◆繝・・繧ｿ縺ｯ辟｡蜉ｹ蛹厄ｼ医Γ繝｢繝ｪ縺ｮ縺ｿ・・    if (hist.pair_pending_souji) { hist.pair_pending_souji = false; hist.pair_session_excluded = []; hist.last_gomi_winner = null; }
+    doneGomi = [...(hist.done_gomi || [])]; doneSouji = [...(hist.done_souji || [])];
+    lastG = hist.last_gomi_winner ?? null; lastS = hist.last_souji_winner ?? null;
+    wG = hist.weights_gomi || {}; wS = hist.weights_souji || {};
+    renderWeekly();
+    computePools(); renderAll();
+    await checkPrevious(ROLE_GOMI);
+    await checkPrevious(ROLE_SOUJI);
+    await checkCycleReset();
+    computePools();
+    busy = false; renderAll();
+  }
+  init();
+})();
+</script>
+</body>
+</html>

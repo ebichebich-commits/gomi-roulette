@@ -134,3 +134,13 @@ git branch -M main
 git remote add origin https://github.com/<ユーザー名>/gomi-roulette.git
 git push -u origin main
 ```
+
+## ebiserver で常駐させる（Web 版・Tailscale から利用）
+
+`web/` に、依存なし（Python 標準ライブラリのみ）の Web サーバーがあります。パチンコ風デザインで、機能・クイズは `roulette.py` と同じです。
+
+- ローカル: `python web/server.py` → http://localhost:8095/
+- ebiserver: `bash web/install-ebiserver.sh`（`~/gomi-roulette` と `~/gomi-roulette-data` を clone し、systemd `gomi-roulette` で常駐）
+- 更新: `git -C ~/gomi-roulette pull && sudo systemctl restart gomi-roulette`（名簿・写真は画面の「データを更新（git pull）」）
+- データフォルダは `--data-dir` / `GOMI_ROULETTE_DATA_DIR` / `roulette_paths.json` / 隣の `gomi-roulette-data` の順で探します。
+- 抽選結果は OK 後に ebiserver 上の `duty_history.json` へ保存されます。
