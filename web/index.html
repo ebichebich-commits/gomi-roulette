@@ -1076,7 +1076,8 @@
       h += `<div class="rank-no">${i === 0 ? "👑" : (i + 1)}</div>`;
       h += `<div class="rank-name">${esc(r.m)}</div>`;
       h += `<div class="rank-bar-wrap"><div class="rank-bar${dim ? " dim" : ""}" style="width:${bar}%"></div></div>`;
-      h += `<div class="rank-meta">${r.w % 1 === 0 ? r.w.toFixed(0) : r.w.toFixed(1)}倍 / ${inPool ? prob.toFixed(1) + "%" : "-"}</div>`;
+      const wLab = r.w % 1 === 0 ? r.w.toFixed(0) : (r.w < 1 ? r.w.toFixed(3) : r.w.toFixed(1));
+      h += `<div class="rank-meta">${wLab}倍 / ${inPool ? prob.toFixed(1) + "%" : "-"}</div>`;
       h += `</div><div class="rank-st">${esc(st)}</div>`;
     });
     $("ranking").innerHTML = h;
