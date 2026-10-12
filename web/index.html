@@ -1210,6 +1210,8 @@
     spinning = true; stopping = false;
     speed = 25 + Math.random() * 15;
     lastTickSector = Math.floor(((angle % 360) + 360) % 360 / TICK_DEG);
+    ensureTickBuffer().then(() => resumeTickAudio());
+    resumeTickAudio();
     playSfx("click");
     $("winner").textContent = `抽選中…（${roleName(drawRole)}当番）`;
     renderButtons();
