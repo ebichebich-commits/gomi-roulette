@@ -597,27 +597,67 @@
 
   // ---------- 効果音 ----------
   const SFX = {
-    tick: new Audio("/sounds/tick.mp3"),
     click: new Audio("/sounds/click.mp3"),
     win: new Audio("/sounds/win.mp3"),
   };
   Object.values(SFX).forEach(a => { a.preload = "auto"; a.volume = 0.7; });
   const sadBgm = new Audio("/sounds/sad.mp3");
   sadBgm.preload = "auto"; sadBgm.loop = true; sadBgm.volume = 0.55;
+  // ティックは Web Audio で重ね再生（HTMLAudio の clone だと前の音が止まるブラウザがある）
+  let tickAudioCtx = null;
+  let tickBuffer = null;
   let tickLastAt = 0;
+  async function ensureTickBuffer() {
+    if (tickBuffer) return true;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      if (!tickAudioCtx) tickAudioCtx = new AC();
+      const res = await fetch("/sounds/tick.mp3", { cache: "force-cache" });
+      const raw = await res.arrayBuffer();
+      tickBuffer = await tickAudioCtx.decodeAudioData(raw.slice(0));
+      return true;
+    } catch (e) { return false; }
+  }
+  function resumeTickAudio() {
+    if (tickAudioCtx && tickAudioCtx.state === "suspended") {
+      tickAudioCtx.resume().catch(() => {});
+    }
+  }
+  function playTickOverlap(vol) {
+    const now = performance.now();
+    if (now - tickLastAt < TICK_COOLDOWN_MS) return;
+    tickLastAt = now;
+    resumeTickAudio();
+    if (tickBuffer && tickAudioCtx) {
+      try {
+        const src = tickAudioCtx.createBufferSource();
+        src.buffer = tickBuffer;
+        const gain = tickAudioCtx.createGain();
+        gain.gain.value = vol == null ? 0.7 : Math.max(0, Math.min(1, vol));
+        src.connect(gain);
+        gain.connect(tickAudioCtx.destination);
+        src.start(0);
+        // 終了後に切断（止める処理はしない＝重なりOK）
+        src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
+        return;
+      } catch (e) { /* fall through */ }
+    }
+    // フォールバック：毎回 new Audio（止めない）
+    try {
+      const a = new Audio("/sounds/tick.mp3");
+      a.volume = vol == null ? 0.7 : vol;
+      a.play().catch(() => {});
+    } catch (e) { /* ignore */ }
+  }
+  ensureTickBuffer();
   function playSfx(name, vol) {
+    if (name === "tick") { playTickOverlap(vol); return; }
     const base = SFX[name];
     if (!base) return;
-    // 回転ティック：0.1秒ごとに新規再生可（既に鳴っている音は止めず重ねる）
-    if (name === "tick") {
-      const now = performance.now();
-      if (now - tickLastAt < TICK_COOLDOWN_MS) return;
-      tickLastAt = now;
-    }
     try {
-      const a = base.cloneNode();
+      const a = new Audio(base.src || base.currentSrc);
       a.volume = vol == null ? base.volume : vol;
-      a.currentTime = 0;
       a.play().catch(() => {});
     } catch (e) { /* autoplay block */ }
   }
