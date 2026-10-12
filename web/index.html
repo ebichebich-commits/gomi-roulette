@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1a0626">
-<title>ゴミ捨て・掃除当番ルーレット</title>
+<title>ゴミ捨て・掃除黄金戦士ルーレット</title>
 <style>
   :root {
     --gold1: #fff3a8;
@@ -737,12 +737,20 @@
 
   function applyThisWeekBoost() {
     for (const [name, mul] of Object.entries(THIS_WEEK_BOOST)) {
+      // 未実施ペナルティで積み上がった値は下げない
       wG[name] = Math.max(Number(wG[name]) || 1, mul);
       wS[name] = Math.max(Number(wS[name]) || 1, mul);
     }
   }
+  /** 総合危険度：ゴミ／掃除の高い方（ブースト＋未実施積み上げを反映） */
   function personalWeight(m) {
-    return THIS_WEEK_BOOST[m] ?? 1;
+    const base = THIS_WEEK_BOOST[m] ?? 1;
+    const gw = wG[m] != null ? Number(wG[m]) : base;
+    const sw = wS[m] != null ? Number(wS[m]) : base;
+    return Math.max(gw, sw, base);
+  }
+  function effectiveWeight(role, m) {
+    return roleWeights(role)[m] ?? 1;
   }
   function markAlreadyDone(name) {
     alreadyDoneExempt.add(name);
@@ -809,13 +817,16 @@
     const secRole = role === ROLE_GOMI ? ROLE_SOUJI : ROLE_GOMI;
     const merged = { ...primary };
     for (const [m, w] of Object.entries(secondary)) {
-      if ((w > 1.0 && w < PENALTY_RATE) || (w > PENALTY_RATE && prevUnfinished.has(key(secRole, m)))) {
-        merged[m] = Math.max(merged[m] ?? 1.0, w);
+      // 持ち越し／未実施ペナルティは両方の抽選に効かせる
+      if ((w > 1.0 && w < PENALTY_RATE) || (w >= PENALTY_RATE && prevUnfinished.has(key(secRole, m)))) {
+        merged[m] = Math.max(Number(merged[m]) || 1.0, Number(w) || 1);
       }
     }
     for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
-      merged[m] = Math.max(merged[m] ?? 1.0, mul);
+      merged[m] = Math.max(Number(merged[m]) || 1.0, mul);
     }
+    // 名簿全員に明示（欠けている人は1）
+    members.forEach(m => { if (merged[m] == null) merged[m] = 1; });
     return merged;
   }
   const roleCandidates = role => (role === ROLE_GOMI ? candG : candS);
@@ -882,14 +893,18 @@
           [{ label: "OK", value: true, cls: "red" }], "fx-praise");
       }
     } else {
-      wmap[last] = Math.max(wmap[last] ?? 1.0, PENALTY_RATE);
+      // 既存倍率にさらに×10を積む（例: すでに10倍 → 100倍）
+      const before = Number(wmap[last]) || (THIS_WEEK_BOOST[last] ?? 1);
+      const after = before * PENALTY_RATE;
+      wmap[last] = after;
       prevUnfinished.add(key(role, last));
       playSadBgm();
       await splashFx("fail", pickPhrase("fail"), 2200);
       await modal(
-        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：今週の当選倍率を${PENALTY_RATE}倍にします。\n次の周に入るときは、持ち越し分として+100%に変換します。\n\n（クリックでBGM停止）</div>`,
+        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：倍率 ${before.toFixed(0)} × ${PENALTY_RATE} = <b>${after.toFixed(0)}倍</b> に積み上げます。\nランキング・ルーレットの角度（相対割合）にも即反映されます。\n次の周に入るときは、持ち越し分として変換します。\n\n（クリックでBGM停止）</div>`,
         [{ label: "OK", value: true, cls: "dark" }], "fx-fail");
       stopSadBgm();
+      renderAll();
     }
   }
 
@@ -941,29 +956,41 @@
     }
   }
 
-  // ---------- 右パネル：総合危険度（ゴミ+掃除を分けない個人評価） ----------
+  // ---------- 右パネル：総合危険度（実倍率＝ブースト×未実施積み上げ） ----------
   function renderRanking() {
-    const rows = members.map((m, idx) => ({ m, w: personalWeight(m), idx }));
+    // 抽選中は今の役割の相対割合、それ以外は総合（高い方）
+    const useRole = confirmed;
+    const rows = members.map((m, idx) => ({
+      m,
+      w: useRole ? effectiveWeight(drawRole, m) : personalWeight(m),
+      idx,
+    }));
     rows.sort((a, b) => (b.w - a.w) || (a.idx - b.idx));
-    const total = rows.reduce((s, r) => s + r.w, 0);
+    // 割合は「今ルーレットに出る候補」基準。確定前は全員の相対
+    const poolSet = new Set(useRole ? activePool() : members);
+    const total = rows.reduce((s, r) => s + (poolSet.has(r.m) ? r.w : 0), 0);
     const maxW = Math.max(1, ...rows.map(r => r.w));
-    let h = `<div class="rank-note">個人の総合危険度（ゴミ・掃除共通）\n倍率：幡鎌・芝原=10 / 上出=3 / 他=1</div>`;
-    h += `<div class="rank-sec">── 総合ランキング ──</div>`;
+    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n基本：幡鎌・芝原=10 / 上出=3 / 他=1\n未実施「いいえ」→ さらに×10積み上げ（例:10→100）</div>`;
+    h += `<div class="rank-sec">── ${useRole ? roleName(drawRole) + "抽選の相対" : "総合"}ランキング ──</div>`;
     rows.forEach((r, i) => {
-      const prob = total > 0 ? (r.w / total) * 100 : 0;
-      const bar = Math.round((r.w / maxW) * 100);
+      const inPool = poolSet.has(r.m) && !isOutOfWheel(r.m);
+      const prob = inPool && total > 0 ? (r.w / total) * 100 : 0;
+      const bar = Math.max(4, Math.round((r.w / maxW) * 100));
       let st = "抽選対象";
       if (alreadyDoneExempt.has(r.m)) st = "達成済み（実施済み免除）";
       else if (weeklyExcluded.has(r.m)) st = "自己申告：今週免除";
       else if (sessionG === r.m) st = "今回のゴミ当番";
       else if (doneGomi.includes(r.m) && doneSouji.includes(r.m)) st = "今周完了済み";
       else if (doneGomi.includes(r.m) || doneSouji.includes(r.m)) st = "片方完了";
+      if (prevUnfinished.has(key(ROLE_GOMI, r.m)) || prevUnfinished.has(key(ROLE_SOUJI, r.m))) {
+        st += "／未実施×10積";
+      }
       const dim = isOutOfWheel(r.m) || (doneGomi.includes(r.m) && doneSouji.includes(r.m));
       h += `<div class="rank-row">`;
       h += `<div class="rank-no">${i === 0 ? "👑" : (i + 1)}</div>`;
       h += `<div class="rank-name">${esc(r.m)}</div>`;
       h += `<div class="rank-bar-wrap"><div class="rank-bar${dim ? " dim" : ""}" style="width:${bar}%"></div></div>`;
-      h += `<div class="rank-meta">${r.w.toFixed(0)}倍 / ${prob.toFixed(1)}%</div>`;
+      h += `<div class="rank-meta">${r.w % 1 === 0 ? r.w.toFixed(0) : r.w.toFixed(1)}倍 / ${inPool ? prob.toFixed(1) + "%" : "-"}</div>`;
       h += `</div><div class="rank-st">${esc(st)}</div>`;
     });
     $("ranking").innerHTML = h;
