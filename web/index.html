@@ -1007,7 +1007,7 @@
       // 達成済み → 今週のルーレットから外す（ブースト対象・通常週どちらも）
       alreadyDoneExempt.add(last);
       if (useWeekSlots()) activeWeekSlots = activeWeekSlots.filter(m => m !== last);
-      delete wmap[last];
+      // 前の周から持ち越した倍率（3倍など）は消さない
       if (r === "yes") {
         await splashFx("yes", pickPhrase("yes"), 2400);
         await modal(
@@ -1069,27 +1069,20 @@
     if (Math.abs(w - Math.round(w)) < 1e-6) return String(Math.round(w));
     return w < 1 ? w.toFixed(3) : w.toFixed(1);
   }
-  /** やり忘れ n 回 → いまの倍率 × (3/10)^n 。例: 2回で100倍 → 9倍 */
+  /** この周で忘れた人だけ ×(3/10)^回数。前の周ですでに3倍などの人はそのまま */
   function decayForgetWeights() {
     const lines = [];
-    const contribN = {};
-    for (const e of ROOM_CONTRIBUTIONS) contribN[e.name] = (contribN[e.name] || 0) + 1;
-    const nextG = {}, nextS = {};
-    for (const m of members) {
+    const names = new Set([...Object.keys(forgetCounts), ...Object.keys(wG), ...Object.keys(wS)]);
+    names.forEach(m => {
       const n = forgetCounts[m] || 0;
-      const contrib = Math.pow(CONTRIB_MUL, contribN[m] || 0);
-      let w;
-      if (n > 0) {
-        const cur = Math.max(Number(wG[m]) || 0, Number(wS[m]) || 0);
-        const base = cur > 0 ? cur : Math.pow(PENALTY_RATE, n);
-        w = base * Math.pow(3 / 10, n);
-        lines.push({ name: m, n, from: base, to: w });
-      } else {
-        w = contrib;
-      }
-      if (Math.abs(w - 1) > 1e-9) { nextG[m] = w; nextS[m] = w; }
-    }
-    wG = nextG; wS = nextS;
+      if (n <= 0) return;
+      const cur = Math.max(Number(wG[m]) || 0, Number(wS[m]) || 0);
+      const base = cur > 0 ? cur : Math.pow(PENALTY_RATE, n);
+      const w = base * Math.pow(3 / 10, n);
+      wG[m] = w;
+      wS[m] = w;
+      lines.push({ name: m, n, from: base, to: w });
+    });
     forgetCounts = {};
     return lines;
   }
@@ -1097,7 +1090,7 @@
     await splashFx("perfect", "これは勝利最も完璧です", 2800);
     const nameHtml = lucky.map(n => `<div class="big gold-name">【 ${esc(n)} 】</div>`).join("");
     await modal(
-      `<div class="head">おめでとう！！</div><div class="big">これは勝利最も完璧です</div>${nameHtml}<div class="body">${lucky.length ? "残った人は、この一周はラッキーでお休みです。" : "残った人はいません。新しい一周を始めます。"}</div>`,
+      `<div class="head">おめでとう！！</div><div class="big">これは勝利最も完璧です</div>${nameHtml}<div class="body">${lucky.length ? "残った人は、今回の当番だけ免除です。\n次の周の免除リストには入れません。" : "残った人はいません。新しい一周を始めます。"}</div>`,
       [{ label: "新しい一周へ", value: true, cls: "red" }],
       "fx-perfect");
     const decayed = decayForgetWeights();
@@ -1117,16 +1110,11 @@
       markAlreadyDone(name);
       weeklyExcluded.add(name);
     }
-    for (const name of lucky) {
-      if (volunteerExempt.has(name)) continue;
-      luckyRest.add(name);
-      markAlreadyDone(name);
-    }
     hist.week_slots_finished = true;
     hist.week_remaining_slots = [];
     hist.forget_counts = {};
     hist.volunteer_exempt = [...volunteerExempt];
-    hist.lucky_rest = [...luckyRest];
+    hist.lucky_rest = [];
     hist.room_contrib_applied = true;
     confirmed = false; drawRole = ROLE_GOMI; sessionG = null;
     computePools(); renderAll();
@@ -1134,7 +1122,7 @@
       ? decayed.map(d => `・${d.name} 忘れ${d.n}回 ${fmtW(d.from)}倍 → ${fmtW(d.to)}倍`).join("\n")
       : "なし";
     await info("新しい一周（未保存）",
-      `全員を入れ直しました。\n連絡文のコピーを押すまで、data には保存されません。\n\n【ボランティア免除（チェック済み）】\n${vols.join("・") || "なし"}\n\n【ラッキーお休み】\n${lucky.join("・") || "なし"}\n\n【やり忘れ ×3/10】\n${dec}`);
+      `全員を入れ直しました。残った人（${lucky.join("・") || "なし"}）は次の周に入ります。\n連絡文のコピーを押すまで、data には保存されません。\n\n【ボランティア免除（チェック済み）】\n${vols.join("・") || "なし"}\n\n【この周のやり忘れ ×3/10】\n${dec}\n前の周ですでに 3倍 などの人は、そのままです。`);
   }
 
   async function checkCycleReset() {
