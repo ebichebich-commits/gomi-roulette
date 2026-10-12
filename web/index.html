@@ -873,37 +873,42 @@
     if (!last || done.includes(last)) return;
     const duty = roleName(role);
     const extraLabel = role === ROLE_GOMI ? "ゴミ袋を替えた" : "掃除機の中身を捨てた";
+    const boost = THIS_WEEK_BOOST[last] ?? 1;
     const r = await modal(
       `<div class="head">前回の${duty}当番は【 ${esc(last)} 】さんでした。</div><div class="head" style="margin-top:8px">任務（${duty}）は完了しましたか？</div>`,
       [{ label: "はい（完了した）", value: "yes" }, { label: "いいえ（まだ）", value: "no", cls: "red" }, { label: extraLabel, value: "extra", cls: "dark" }]);
     const wmap = role === ROLE_GOMI ? wG : wS;
     if (r === "yes" || r === "extra") {
-      done.push(last);
-      // 今週ブースト対象は完了しても倍率を消さない（ルーレット用）
+      if (!done.includes(last)) done.push(last);
+      // 達成済み → 今週のルーレットから外す（幡鎌・芝原も同様）
+      if (useWeekSlots()) alreadyDoneExempt.add(last);
       if (!(last in THIS_WEEK_BOOST)) delete wmap[last];
       if (r === "yes") {
         await splashFx("yes", pickPhrase("yes"), 2400);
         await modal(
-          `<div class="head">任務完了！</div><div class="big">いざ出陣！</div><div class="head" style="margin-top:8px">【 ${esc(last)} 】さん ${esc(duty)}当番 完了</div>`,
+          `<div class="head">任務完了！</div><div class="big">いざ出陣！</div><div class="head" style="margin-top:8px">【 ${esc(last)} 】さん ${esc(duty)}当番 完了<br><span style="font-size:16px">今週のルーレットは達成済みのため対象外</span></div>`,
           [{ label: "OK", value: true, cls: "red" }], "fx-yes");
       } else {
         await splashFx("praise", pickPhrase("praise"), 2600);
         await modal(
-          `<div class="big praise">えらい！感謝！</div><div class="big" style="font-size:clamp(28px,6vw,44px)">【 ${esc(last)} 】さん</div><div class="head">${esc(extraLabel)}</div>`,
+          `<div class="big praise">えらい！感謝！</div><div class="big" style="font-size:clamp(28px,6vw,44px)">【 ${esc(last)} 】さん</div><div class="head">${esc(extraLabel)}<br><span style="font-size:16px">今週のルーレットは達成済みのため対象外</span></div>`,
           [{ label: "OK", value: true, cls: "red" }], "fx-praise");
       }
+      computePools();
+      renderAll();
     } else {
-      // 既存倍率にさらに×10を積む（例: すでに10倍 → 100倍）
-      const before = Number(wmap[last]) || (THIS_WEEK_BOOST[last] ?? 1);
-      const after = before * PENALTY_RATE;
-      wmap[last] = after;
+      // 未実施 → 今週ルーレットに残す。幡鎌・芝原は10倍のまま（積まない）
+      const keep = THIS_WEEK_BOOST[last] ?? PENALTY_RATE;
+      wmap[last] = keep;
       prevUnfinished.add(key(role, last));
+      alreadyDoneExempt.delete(last);
       playSadBgm();
       await splashFx("fail", pickPhrase("fail"), 2200);
       await modal(
-        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：倍率 ${before.toFixed(0)} × ${PENALTY_RATE} = <b>${after.toFixed(0)}倍</b> に積み上げます。\nランキング・ルーレットの角度（相対割合）にも即反映されます。\n次の周に入るときは、持ち越し分として変換します。\n\n（クリックでBGM停止）</div>`,
+        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：まだなので<strong>今週ルーレットに残ります</strong>。\n倍率は <b>${keep}倍</b> のままです。\nランキング・ルーレット角度にも反映します。\n\n（クリックでBGM停止）</div>`,
         [{ label: "OK", value: true, cls: "dark" }], "fx-fail");
       stopSadBgm();
+      computePools();
       renderAll();
     }
   }
