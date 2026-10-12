@@ -1069,21 +1069,37 @@
     if (Math.abs(w - Math.round(w)) < 1e-6) return String(Math.round(w));
     return w < 1 ? w.toFixed(3) : w.toFixed(1);
   }
-  /** この周で忘れた人だけ ×(3/10)^回数。前の周ですでに3倍などの人はそのまま */
-  function decayForgetWeights() {
+  /**
+   * 新しい周へ持ち越し。
+   * 10倍（幡鎌・芝原）→ ×3/10 で 3倍。3倍（上出）→ そのまま。
+   * この周でさらに忘れて積んだ人だけ、その倍率 ×(3/10)^回数。
+   * 前の周ですでに 3倍の人は、もう一度かけない。
+   */
+  function carryWeightsToNewCycle() {
     const lines = [];
-    const names = new Set([...Object.keys(forgetCounts), ...Object.keys(wG), ...Object.keys(wS)]);
-    names.forEach(m => {
+    const handled = new Set();
+    Object.keys(forgetCounts).forEach(m => {
       const n = forgetCounts[m] || 0;
       if (n <= 0) return;
-      const cur = Math.max(Number(wG[m]) || 0, Number(wS[m]) || 0);
+      const cur = Math.max(Number(wG[m]) || 0, Number(wS[m]) || 0, THIS_WEEK_BOOST[m] || 0);
       const base = cur > 0 ? cur : Math.pow(PENALTY_RATE, n);
       const w = base * Math.pow(3 / 10, n);
       wG[m] = w;
       wS[m] = w;
-      lines.push({ name: m, n, from: base, to: w });
+      handled.add(m);
+      lines.push({ name: m, from: base, to: w });
     });
     forgetCounts = {};
+    Object.entries(THIS_WEEK_BOOST).forEach(([name, boost]) => {
+      if (handled.has(name)) return;
+      const cur = Math.max(Number(wG[name]) || 0, Number(wS[name]) || 0);
+      const base = Math.max(cur, boost);
+      // 10倍以上だけ 3/10。すでに 3倍など 10未満はそのまま
+      const w = base >= 10 ? base * 3 / 10 : base;
+      wG[name] = w;
+      wS[name] = w;
+      lines.push({ name, from: base, to: w });
+    });
     return lines;
   }
   async function celebrateAndRestart(lucky) {
@@ -1093,7 +1109,7 @@
       `<div class="head">おめでとう！！</div><div class="big">これは勝利最も完璧です</div>${nameHtml}<div class="body">${lucky.length ? "残った人は、今回の当番だけ免除です。\n次の周の免除リストには入れません。" : "残った人はいません。新しい一周を始めます。"}</div>`,
       [{ label: "新しい一周へ", value: true, cls: "red" }],
       "fx-perfect");
-    const decayed = decayForgetWeights();
+    const decayed = carryWeightsToNewCycle();
     weekSlotsActive = false;
     weekSlotsContinue = false;
     activeWeekSlots = [];
@@ -1119,10 +1135,10 @@
     confirmed = false; drawRole = ROLE_GOMI; sessionG = null;
     computePools(); renderAll();
     const dec = decayed.length
-      ? decayed.map(d => `・${d.name} 忘れ${d.n}回 ${fmtW(d.from)}倍 → ${fmtW(d.to)}倍`).join("\n")
+      ? decayed.map(d => `・${d.name} ${fmtW(d.from)}倍 → ${fmtW(d.to)}倍`).join("\n")
       : "なし";
     await info("新しい一周（未保存）",
-      `全員を入れ直しました。残った人（${lucky.join("・") || "なし"}）は次の周に入ります。\n連絡文のコピーを押すまで、data には保存されません。\n\n【ボランティア免除（チェック済み）】\n${vols.join("・") || "なし"}\n\n【この周のやり忘れ ×3/10】\n${dec}\n前の周ですでに 3倍 などの人は、そのままです。`);
+      `全員を入れ直しました。残った人（${lucky.join("・") || "なし"}）は次の周に入ります。\n連絡文のコピーを押すまで、data には保存されません。\n\n【ボランティア免除（チェック済み）】\n${vols.join("・") || "なし"}\n\n【倍率の持ち越し】\n${dec}\n10倍は ×3/10 で 3倍。もともと 3倍の人はそのままです。`);
   }
 
   async function checkCycleReset() {

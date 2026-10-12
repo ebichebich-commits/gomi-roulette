@@ -226,35 +226,41 @@ class App:
             order = list(range(n))
             random.shuffle(order)
             fresh = True
-        by_week = {}
-        src = raw.get("by_week") if isinstance(raw.get("by_week"), dict) else {}
-        for k, v in src.items():
-            if isinstance(v, int) and 0 <= v < n:
-                by_week[str(k)] = v
-        return {"order": order, "by_week": by_week}, fresh
+        idx = raw.get("current_idx")
+        current_idx = idx if isinstance(idx, int) and 0 <= idx < n else None
+        roulette_key = raw.get("roulette_key") if isinstance(raw.get("roulette_key"), str) else ""
+        return {"order": order, "current_idx": current_idx, "roulette_key": roulette_key}, fresh
 
     def _write_ai_queue(self, state: dict) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._ai_quiz_path().write_text(
             json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def assign_ai_quiz(self, week_key: str) -> tuple[str, str]:
-        """同じ週は同じ問題。初めての週だけ先頭を出し、その問題を列の最後へ回す。"""
+    def _roulette_key(self) -> str:
+        """保存済みの当番が変わったら、別のルーレットとみなす。"""
+        h = read_history(self.data_dir / DATA_FILE)
+        snap = h.get("session_close_snapshot") if isinstance(h.get("session_close_snapshot"), dict) else {}
+        saved = snap.get("saved_at") or ""
+        return "|".join([
+            str(saved),
+            str(h.get("last_gomi_winner") or ""),
+            str(h.get("last_souji_winner") or ""),
+            "1" if h.get("week_slots_finished") else "0",
+        ])
+
+    def assign_ai_quiz(self) -> tuple[str, str]:
+        """同じルーレット中は同じ問題。次のルーレットになったら次の問題にし、出した問題は列の最後へ。"""
+        key = self._roulette_key()
         with _write_lock:
-            state, need_write = self._read_ai_queue()
-            by_week = state["by_week"]
+            state, _fresh = self._read_ai_queue()
             order = state["order"]
-            if week_key in by_week:
-                idx = by_week[week_key]
+            if state.get("roulette_key") == key and state.get("current_idx") is not None:
+                idx = state["current_idx"]
             else:
                 idx = order[0]
                 state["order"] = order[1:] + [idx]
-                by_week[week_key] = idx
-                if len(by_week) > 80:
-                    for k in sorted(by_week)[:-80]:
-                        by_week.pop(k, None)
-                need_write = True
-            if need_write:
+                state["current_idx"] = idx
+                state["roulette_key"] = key
                 self._write_ai_queue(state)
         item = AI_QUIZZES[idx]
         return item["q"], item["a"]
@@ -277,8 +283,7 @@ class App:
             if q and a:
                 img = next((self.url(t / n) for n in QUIZ_ANSWER_IMAGE_NAMES if (t / n).is_file()), None)
                 return {"question": q, "answer": a, "source": "week", "image": img}
-        week_key = datetime.now().strftime("%G-W%V")
-        q, a = self.assign_ai_quiz(week_key)
+        q, a = self.assign_ai_quiz()
         return {"question": q, "answer": a, "source": "ai", "image": None}
 
     def data(self) -> dict:
