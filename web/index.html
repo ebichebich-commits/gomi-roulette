@@ -174,6 +174,125 @@
   .tabquiz button { color: #fff; background: #e63946; box-shadow: none; font-size: 20px; padding: 8px 18px; }
   textarea.msg { width: 100%; height: 180px; border-radius: 10px; padding: 8px; font: inherit; font-size: 13px; color: #170320; }
 
+  /* 演出オーバーレイ */
+  #fx {
+    position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none;
+    overflow: hidden;
+  }
+  #fx.on { display: block; }
+  #fx .fx-bg { position: absolute; inset: 0; }
+  #fx .fx-burst {
+    position: absolute; left: 50%; top: 45%; width: 140vmax; height: 140vmax;
+    margin: -70vmax; border-radius: 50%;
+    background: conic-gradient(from 0deg, #ff0040, #ffd000, #00ff88, #ff00cc, #ff0040);
+    animation: spinburst 8s linear infinite; opacity: .55; filter: blur(2px);
+  }
+  #fx .fx-rays {
+    position: absolute; inset: -20%;
+    background: repeating-conic-gradient(from 0deg, rgba(255,210,0,.45) 0 8deg, transparent 8deg 16deg);
+    animation: spinburst 14s linear infinite; opacity: .5;
+  }
+  #fx .fx-vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 40%, transparent 10%, rgba(0,0,0,.75) 70%);
+  }
+  #fx.win .fx-bg { background: radial-gradient(circle at 50% 30%, #6e0a24, #120308 70%); }
+  #fx.praise .fx-bg { background: radial-gradient(circle at 50% 40%, #fff7b0, #ff6ad5 45%, #4b00a8 90%); }
+  #fx.fail .fx-bg { background: #000; }
+  #fx.yes .fx-bg { background: radial-gradient(circle at 50% 40%, #ff3b3b, #5a0008 70%, #000 100%); }
+  #fx .fx-feather, #fx .fx-spark, #fx .fx-fire {
+    position: absolute; border-radius: 50%; pointer-events: none;
+  }
+  #fx .fx-feather {
+    width: 18px; height: 28px; background: linear-gradient(180deg, #fff, #ddd); opacity: .85;
+    border-radius: 50% 50% 40% 40%; animation: floatDown linear forwards;
+    box-shadow: 0 0 8px #fff;
+  }
+  #fx .fx-spark {
+    width: 6px; height: 6px; background: #ffe27a; box-shadow: 0 0 10px #ffd000;
+    animation: sparkle ease-out forwards;
+  }
+  #fx .fx-fire {
+    width: 8px; height: 8px; background: #ffb000; box-shadow: 0 0 14px #ff4000;
+    animation: firework ease-out forwards;
+  }
+  #fx .fx-crown {
+    position: absolute; left: 50%; top: 8%; transform: translateX(-50%);
+    font-size: clamp(40px, 10vw, 84px); filter: drop-shadow(0 0 16px gold);
+    animation: bounceIn .5s ease-out;
+  }
+  #fx .fx-curtains::before, #fx .fx-curtains::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 18%;
+    background: linear-gradient(90deg, #6e0008, #c40a14 40%, #8a0010);
+    opacity: .85; box-shadow: 0 0 30px rgba(180,0,20,.6);
+  }
+  #fx .fx-curtains::before { left: 0; border-radius: 0 40% 40% 0 / 0 20% 20% 0; }
+  #fx .fx-curtains::after { right: 0; border-radius: 40% 0 0 40% / 20% 0 0 20%; }
+  #fx .fx-spot {
+    position: absolute; left: 50%; bottom: 8%; width: 50vmin; height: 18vmin;
+    margin-left: -25vmin; border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,255,255,.55), transparent 70%);
+  }
+  @keyframes spinburst { to { transform: rotate(360deg); } }
+  @keyframes floatDown {
+    from { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+    15% { opacity: .9; }
+    to { transform: translateY(110vh) rotate(240deg); opacity: 0; }
+  }
+  @keyframes sparkle {
+    from { transform: scale(0); opacity: 1; }
+    to { transform: scale(1.8) translate(var(--dx), var(--dy)); opacity: 0; }
+  }
+  @keyframes firework {
+    from { transform: translate(0,0) scale(1); opacity: 1; }
+    to { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+  @keyframes bounceIn {
+    from { transform: translateX(-50%) scale(.3); opacity: 0; }
+    60% { transform: translateX(-50%) scale(1.15); }
+    to { transform: translateX(-50%) scale(1); opacity: 1; }
+  }
+
+  .modal.fx-win {
+    background: radial-gradient(circle at 50% 0%, #8a1028, #1a0508 75%);
+    border-color: #ffd000; box-shadow: 0 0 50px rgba(255,200,0,.7), inset 0 0 40px rgba(255,60,60,.3);
+  }
+  .modal.fx-win .big {
+    background: linear-gradient(180deg, #fff8c0, #ffd000 40%, #b8860b 55%, #fff3a8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 18px rgba(255,200,0,.9));
+    font-size: clamp(40px, 10vw, 72px);
+  }
+  .modal.fx-praise {
+    background: radial-gradient(circle at 50% 20%, #fff7c0, #ff6ad5 50%, #3a0080 100%);
+    border-color: #fff; width: min(96vw, 720px);
+  }
+  .modal.fx-praise .praise {
+    font-size: clamp(48px, 12vw, 96px); font-weight: 900;
+    background: linear-gradient(180deg, #fff, #ffe27a 35%, #ffd000 50%, #fff8c0);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 20px #fff) drop-shadow(0 4px 0 #a00040);
+    animation: pulseGold 1s ease-in-out infinite alternate;
+  }
+  @keyframes pulseGold { from { transform: scale(1); } to { transform: scale(1.06); } }
+  .modal.fx-fail {
+    background: #050505; border-color: #333; color: #777;
+    box-shadow: 0 0 40px rgba(0,0,0,.9), inset 0 -80px 80px rgba(255,255,255,.06);
+  }
+  .modal.fx-fail .big {
+    color: #5a5a5a; text-shadow: none; filter: none;
+    font-size: clamp(36px, 9vw, 68px); letter-spacing: .12em;
+  }
+  .modal.fx-yes {
+    background: radial-gradient(circle at 50% 30%, #ff4040, #5a0008 70%, #100000);
+    border-color: #ffd000; box-shadow: 0 0 50px rgba(255,40,0,.7);
+  }
+  .modal.fx-yes .big {
+    color: #111; -webkit-text-stroke: 3px #fff;
+    text-shadow: 0 0 8px #ff0040, 0 0 24px #ffd000, 4px 4px 0 #8a0000;
+    font-size: clamp(40px, 10vw, 76px); transform: rotate(-4deg);
+  }
+
   @media (max-width: 1100px) {
     main { grid-template-columns: 1fr; }
     .wheel-wrap { width: min(100%, 96vw); }
@@ -221,6 +340,7 @@
 </main>
 
 <div id="overlay"><div class="modal" id="modal"></div></div>
+<div id="fx" aria-hidden="true"><div class="fx-bg"></div><div class="fx-layer"></div></div>
 
 <script>
 (() => {
@@ -230,6 +350,20 @@
   const ROUND_CARRY_STEP = 1.0;
   const ROLE_GOMI = "gomi", ROLE_SOUJI = "souji";
   const roleName = r => (r === ROLE_GOMI ? "ゴミ捨て" : "掃除");
+  // 今週のルーレット枠（名簿本体は変更せず、帳尻合わせで同名枠を重複可）
+  // 残メンバー + 帳尻合わせ追加（幡鎌・中田は重複枠）
+  const THIS_WEEK_SLOTS = ["幡鎌", "若旅", "中田", "田中", "芝原", "陳", "白井", "幡鎌", "中田", "伊賀", "上出"];
+  const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10 };
+  const THIS_WEEK_EXEMPTIONS = [
+    { name: "田中", reason: "ゴミ捨てボランティア" },
+    { name: "中田", reason: "掃除ボランティア" },
+    { name: "海老澤", reason: "プリンタ破棄" },
+    { name: "若旅", reason: "プリンタ破棄" },
+    { name: "田中", reason: "プリンタ破棄" },
+    { name: "椎名", reason: "プリンタ破棄" },
+    { name: "田中", reason: "ゴミ捨てボランティア" },
+  ];
+  const TICK_DEG = 15;
   // パチンコ風の配色（赤・金・白・黒・橙・紫）
   const SEG = [
     { a: "#ff4040", b: "#a00010", t: "#fff" },
@@ -243,6 +377,71 @@
   const $ = id => document.getElementById(id);
   const canvas = $("wheel"), ctx = canvas.getContext("2d");
 
+  // ---------- 効果音 ----------
+  const SFX = {
+    tick: new Audio("/sounds/tick.mp3"),
+    click: new Audio("/sounds/click.mp3"),
+    win: new Audio("/sounds/win.mp3"),
+  };
+  Object.values(SFX).forEach(a => { a.preload = "auto"; a.volume = 0.7; });
+  function playSfx(name, vol) {
+    const base = SFX[name];
+    if (!base) return;
+    try {
+      const a = base.cloneNode();
+      a.volume = vol == null ? base.volume : vol;
+      a.currentTime = 0;
+      a.play().catch(() => {});
+    } catch (e) { /* autoplay block */ }
+  }
+
+  // ---------- 演出 ----------
+  let fxTimer = null;
+  function clearFx() {
+    const fx = $("fx");
+    fx.className = "";
+    fx.querySelector(".fx-layer").innerHTML = "";
+    fx.classList.remove("on");
+    if (fxTimer) { clearTimeout(fxTimer); fxTimer = null; }
+  }
+  function spawnParticles(kind, n) {
+    const layer = $("fx").querySelector(".fx-layer");
+    for (let i = 0; i < n; i++) {
+      const el = document.createElement("div");
+      el.className = kind;
+      el.style.left = Math.random() * 100 + "%";
+      el.style.top = (kind === "fx-feather" ? -5 : 20 + Math.random() * 50) + "%";
+      const dx = (Math.random() - 0.5) * 220, dy = (Math.random() - 0.5) * 220;
+      el.style.setProperty("--dx", dx + "px");
+      el.style.setProperty("--dy", dy + "px");
+      el.style.animationDuration = (kind === "fx-feather" ? 4 + Math.random() * 4 : 0.6 + Math.random() * 0.9) + "s";
+      el.style.animationDelay = (Math.random() * 0.8) + "s";
+      layer.appendChild(el);
+    }
+  }
+  function showFx(mode) {
+    clearFx();
+    const fx = $("fx");
+    fx.className = "on " + mode;
+    const layer = fx.querySelector(".fx-layer");
+    if (mode === "win") {
+      layer.innerHTML = '<div class="fx-curtains"></div><div class="fx-rays"></div><div class="fx-vignette"></div>';
+      spawnParticles("fx-feather", 28); spawnParticles("fx-spark", 40);
+    } else if (mode === "praise") {
+      layer.innerHTML = '<div class="fx-burst"></div><div class="fx-rays"></div><div class="fx-crown">👑</div><div class="fx-vignette"></div>';
+      spawnParticles("fx-spark", 60);
+    } else if (mode === "fail") {
+      layer.innerHTML = '<div class="fx-spot"></div>';
+    } else if (mode === "yes") {
+      layer.innerHTML = '<div class="fx-rays"></div><div class="fx-vignette"></div>';
+      spawnParticles("fx-fire", 50); spawnParticles("fx-spark", 40);
+    }
+  }
+  function withFx(mode, ms = 4500) {
+    showFx(mode);
+    fxTimer = setTimeout(clearFx, ms);
+  }
+
   // ---------- 状態（roulette.py と同じくセッション終了までメモリのみ） ----------
   let members = [], hist = {};
   let doneGomi = [], doneSouji = [], lastG = null, lastS = null, wG = {}, wS = {};
@@ -252,8 +451,10 @@
   let confirmed = false, drawRole = ROLE_GOMI, sessionG = null;
   let angle = 0, speed = 0, spinning = false, stopping = false;
   let busy = true, finished = false, weekly = null;
+  let lastTickSector = 0;
 
   const key = (role, m) => role + "\u0000" + m;
+  const useWeekSlots = () => THIS_WEEK_SLOTS.length > 0;
 
   // ---------- モーダル ----------
   function modal(html, buttons, cls = "") {
@@ -266,7 +467,11 @@
         const el = document.createElement("button");
         el.textContent = b.label;
         if (b.cls) el.className = b.cls;
-        el.onclick = () => { $("overlay").classList.remove("open"); resolve(b.value); };
+        el.onclick = () => {
+          $("overlay").classList.remove("open");
+          clearFx();
+          resolve(b.value);
+        };
         bar.appendChild(el);
       });
       $("overlay").classList.add("open");
@@ -276,6 +481,28 @@
   }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const info = (title, text) => modal(`<div class="head">${esc(title)}</div><div class="body">${esc(text)}</div>`, [{ label: "OK", value: true }]);
+
+  function applyThisWeekBoost() {
+    for (const [name, mul] of Object.entries(THIS_WEEK_BOOST)) {
+      wG[name] = Math.max(wG[name] ?? 1, mul);
+      wS[name] = Math.max(wS[name] ?? 1, mul);
+    }
+  }
+  function applyThisWeekExemptions() {
+    const onWheel = new Set(THIS_WEEK_SLOTS);
+    const applied = [], leftover = [];
+    const seen = new Set();
+    for (const e of THIS_WEEK_EXEMPTIONS) {
+      const k = e.name + "\0" + e.reason;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (onWheel.has(e.name)) {
+        weeklyExcluded.add(e.name);
+        applied.push(e);
+      } else leftover.push(e);
+    }
+    return { applied, leftover };
+  }
 
   // ---------- roulette.py の移植 ----------
   function migrateLegacy(d) {
@@ -303,7 +530,12 @@
       if (ps.has(m) && !sp.includes(m)) sp.push(m);
     });
     candG = gp; candS = sp;
-    candidates = [...new Set([...gp, ...sp])].sort((a, b) => members.indexOf(a) - members.indexOf(b));
+    if (useWeekSlots()) {
+      // 除外チェック用：今週枠のユニーク名（重複枠は帳尻合わせ）
+      candidates = [...new Set(THIS_WEEK_SLOTS)];
+    } else {
+      candidates = [...new Set([...gp, ...sp])].sort((a, b) => members.indexOf(a) - members.indexOf(b));
+    }
   }
 
   function roleWeights(role) {
@@ -316,21 +548,38 @@
         merged[m] = Math.max(merged[m] ?? 1.0, w);
       }
     }
+    for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
+      merged[m] = Math.max(merged[m] ?? 1.0, mul);
+    }
     return merged;
   }
   const roleCandidates = role => (role === ROLE_GOMI ? candG : candS);
 
   function activePool() {
+    if (useWeekSlots()) {
+      let pool = THIS_WEEK_SLOTS.filter(m => !weeklyExcluded.has(m));
+      if (drawRole === ROLE_SOUJI && sessionG) pool = pool.filter(m => m !== sessionG);
+      return pool; // 同名の重複枠をそのまま残す
+    }
     let pool = roleCandidates(drawRole).filter(m => !weeklyExcluded.has(m));
     if (drawRole === ROLE_SOUJI && sessionG) pool = pool.filter(m => m !== sessionG);
     return pool;
   }
   function wheelOrder() {
     const wm = roleWeights(drawRole);
-    return activePool().sort((a, b) => (wm[b] ?? 1) - (wm[a] ?? 1));
+    // 重複枠があるので安定ソート（同倍率は元の並びを維持）
+    return activePool()
+      .map((m, i) => ({ m, i, w: wm[m] ?? 1 }))
+      .sort((a, b) => (b.w - a.w) || (a.i - b.i))
+      .map(x => x.m);
   }
 
   function canRunBoth() {
+    if (useWeekSlots()) {
+      const names = [...new Set(THIS_WEEK_SLOTS.filter(m => !weeklyExcluded.has(m)))];
+      if (names.length < 2) return [false, "ゴミと掃除の両方を決める人が足りません。除外を減らしてください。"];
+      return [true, ""];
+    }
     const ga = candG.filter(m => !weeklyExcluded.has(m));
     const sa = candS.filter(m => !weeklyExcluded.has(m));
     if (!ga.length || !sa.length) return [false, "ゴミまたは掃除の候補がいません。除外を減らしてください。"];
@@ -354,13 +603,27 @@
     const wmap = role === ROLE_GOMI ? wG : wS;
     if (r === "yes" || r === "extra") {
       done.push(last);
-      delete wmap[last];
-      if (r === "yes") await info("確認", `${duty}当番を完了リストに加えました。`);
-      else await modal(`<div class="big praise">えらい！！</div><div class="big" style="font-size:30px">【 ${esc(last)} 】さん</div><div class="head">${esc(extraLabel)}</div>`, [{ label: "OK", value: true }]);
+      // 今週ブースト対象は完了しても倍率を消さない（ルーレット用）
+      if (!(last in THIS_WEEK_BOOST)) delete wmap[last];
+      if (r === "yes") {
+        withFx("yes", 5000);
+        await modal(
+          `<div class="head">任務完了！</div><div class="big">いざ出陣！</div><div class="head" style="margin-top:8px">【 ${esc(last)} 】さん ${esc(duty)}当番 完了</div>`,
+          [{ label: "OK", value: true, cls: "red" }], "fx-yes");
+      } else {
+        withFx("praise", 5500);
+        playSfx("win", 0.85);
+        await modal(
+          `<div class="big praise">えらい！感謝！</div><div class="big" style="font-size:clamp(28px,6vw,44px)">【 ${esc(last)} 】さん</div><div class="head">${esc(extraLabel)}</div>`,
+          [{ label: "OK", value: true, cls: "red" }], "fx-praise");
+      }
     } else {
       wmap[last] = Math.max(wmap[last] ?? 1.0, PENALTY_RATE);
       prevUnfinished.add(key(role, last));
-      await info("未完了", `${last}さんの${duty}当番：今週の当選倍率を${PENALTY_RATE}倍にします。\n次の周に入るときは、持ち越し分として+100%に変換します。`);
+      withFx("fail", 4500);
+      await modal(
+        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：今週の当選倍率を${PENALTY_RATE}倍にします。\n次の周に入るときは、持ち越し分として+100%に変換します。</div>`,
+        [{ label: "OK", value: true, cls: "dark" }], "fx-fail");
     }
   }
 
@@ -460,7 +723,10 @@
       ? (drawRole === ROLE_GOMI ? "【1回目・ゴミ捨て当番】[Space] / ボタンでスタート・ストップ" : "【2回目・掃除当番】[Space] / ボタンでスタート・ストップ")
       : "まず「除外を確定する」を押してから抽選できます。\n（1回目：ゴミ捨て → 2回目：掃除）\n※途中で閉じた場合は抽選は無効。次回は最初からやり直しです。";
     $("info").style.whiteSpace = "pre-line";
-    $("status").textContent = `総メンバー: ${members.length}人 / ゴミ残り: ${candG.length} / 掃除残り: ${candS.length}`;
+    const slotN = useWeekSlots() ? activePool().length : null;
+    $("status").textContent = useWeekSlots()
+      ? `総メンバー: ${members.length}人 / 今週枠: ${THIS_WEEK_SLOTS.length}（重複込） / 抽選中の枠: ${slotN ?? "-"} / 除外: ${weeklyExcluded.size}`
+      : `総メンバー: ${members.length}人 / ゴミ残り: ${candG.length} / 掃除残り: ${candS.length}`;
   }
   function renderButtons() {
     $("confirmBtn").disabled = confirmed || busy || finished;
@@ -607,6 +873,8 @@
   function startSpin() {
     spinning = true; stopping = false;
     speed = 25 + Math.random() * 15;
+    lastTickSector = Math.floor(((angle % 360) + 360) % 360 / TICK_DEG);
+    playSfx("click");
     $("winner").textContent = `抽選中…（${roleName(drawRole)}当番）`;
     renderButtons();
   }
@@ -617,6 +885,7 @@
       if (!activePool().length) { await info("抽選不可", "参加する人がいません。除外リストを確認してください。"); return; }
       startSpin();
     } else if (!stopping) {
+      playSfx("click");
       stopping = true;
     }
   }
@@ -627,7 +896,19 @@
     while (acc >= 20) {
       acc -= 20;
       if (spinning) {
+        const prevAng = angle;
         angle = (angle + speed) % 360;
+        // 矢印が15度進むごとに1回（速い＝ピロピロ、遅い＝間隔が開く）
+        let from = Math.floor(prevAng / TICK_DEG);
+        const to = Math.floor(angle / TICK_DEG);
+        const sectors = 360 / TICK_DEG;
+        let steps = 0;
+        while (from !== to && steps < 4) {
+          from = (from + 1) % sectors;
+          playSfx("tick", Math.min(0.85, 0.35 + speed / 40));
+          steps++;
+        }
+        lastTickSector = to;
         if (stopping) {
           speed *= 0.96;
           if (speed < 0.15) { speed = 0; spinning = false; stopping = false; determineWinner(); }
@@ -650,11 +931,17 @@
       if (cum <= angle && angle < cum + ext) { winner = m; break; }
       cum += ext;
     }
-    const rate = ((wm[winner] ?? 1) / total) * 100;
+    // 同名が複数枠ある場合、当選確率は枠の合計で表示
+    const winWeight = order.filter(m => m === winner).reduce((s, m) => s + (wm[m] ?? 1), 0);
+    const rate = (winWeight / total) * 100;
     const role = drawRole;
-    const winDlg = () => modal(
-      `<div class="head">今週の${role === ROLE_GOMI ? "ゴミ捨て" : "掃除"}当番は</div><div class="big">【 ${esc(winner)} 】</div><div class="head">さんです！</div><div class="body" style="margin-top:12px">この抽選での当選確率：${rate.toFixed(1)}%</div>`,
-      [{ label: "OK", value: true, cls: "red" }]);
+    const winDlg = async () => {
+      playSfx("win");
+      withFx("win", 6000);
+      await modal(
+        `<div class="head">今週の${role === ROLE_GOMI ? "ゴミ捨て" : "掃除"}当番は</div><div class="big">【 ${esc(winner)} 】</div><div class="head">さんです！</div><div class="body" style="margin-top:12px">この抽選での当選確率：${rate.toFixed(1)}%</div>`,
+        [{ label: "OK", value: true, cls: "red" }], "fx-win");
+    };
 
     if (role === ROLE_GOMI) {
       sessionG = winner;
@@ -737,7 +1024,12 @@
     renderAll();
   }
   function cancelConfirm() { confirmed = false; drawRole = ROLE_GOMI; sessionG = null; renderAll(); }
-  function clearExclusions() { weeklyExcluded.clear(); cancelConfirm(); }
+  function clearExclusions() {
+    weeklyExcluded.clear();
+    // 免除対象はクリア後も再適用（手動解除は個別チェックで）
+    applyThisWeekExemptions();
+    cancelConfirm();
+  }
 
   $("confirmBtn").onclick = confirmExclusions;
   $("cancelBtn").onclick = cancelConfirm;
@@ -768,13 +1060,30 @@
     if (hist.pair_pending_souji) { hist.pair_pending_souji = false; hist.pair_session_excluded = []; hist.last_gomi_winner = null; }
     doneGomi = [...(hist.done_gomi || [])]; doneSouji = [...(hist.done_souji || [])];
     lastG = hist.last_gomi_winner ?? null; lastS = hist.last_souji_winner ?? null;
-    wG = hist.weights_gomi || {}; wS = hist.weights_souji || {};
+    wG = { ...(hist.weights_gomi || {}) }; wS = { ...(hist.weights_souji || {}) };
+    applyThisWeekBoost();
+    const ex = applyThisWeekExemptions();
     renderWeekly();
     computePools(); renderAll();
+    if (ex.applied.length || ex.leftover.length) {
+      let body = "";
+      if (ex.applied.length) {
+        body += "【今週ルーレットから除外】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+      }
+      if (ex.leftover.length) {
+        body += "【次週へ持ち越し（今週枠にいなかった免除）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n");
+      } else {
+        body += "次週へ持ち越す免除はありません。";
+      }
+      await info("免除の反映", body);
+    }
     await checkPrevious(ROLE_GOMI);
     await checkPrevious(ROLE_SOUJI);
     await checkCycleReset();
+    applyThisWeekBoost();
     computePools();
+    // 免除は一周リセット後も維持
+    applyThisWeekExemptions();
     busy = false; renderAll();
   }
   init();

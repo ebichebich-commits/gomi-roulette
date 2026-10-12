@@ -23,7 +23,10 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = Path(__file__).resolve().parent / "index.html"
+WEB = Path(__file__).resolve().parent
+PAGE = WEB / "index.html"
+SOUNDS = WEB / "sounds"
+SOUND_EXTS = (".mp3", ".wav", ".ogg", ".m4a")
 
 CSV_FILE = "members.csv"
 DATA_FILE = "duty_history.json"
@@ -236,6 +239,16 @@ def make_handler(app: App):
             path = unquote(urlparse(self.path).path)
             if path in ("/", "/index.html", "/gomi", "/dashboard/gomi", "/dashboard/gomi/"):
                 return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+            if path.startswith("/sounds/"):
+                try:
+                    full = (SOUNDS / path[len("/sounds/"):]).resolve()
+                    full.relative_to(SOUNDS.resolve())
+                except (ValueError, OSError):
+                    return self._json({"ok": False}, 404)
+                if not full.is_file() or full.suffix.lower() not in SOUND_EXTS:
+                    return self._json({"ok": False}, 404)
+                ctype = mimetypes.guess_type(full.name)[0] or "audio/mpeg"
+                return self._send(200, full.read_bytes(), ctype)
             if path == "/api/data":
                 return self._json(app.data())
             if path == "/api/quiz-answer":

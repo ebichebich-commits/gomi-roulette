@@ -191,6 +191,71 @@
       display: none;
     }
 
+    #fx {
+      position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none; overflow: hidden;
+    }
+    #fx.on { display: block; }
+    #fx .fx-bg { position: absolute; inset: 0; }
+    #fx.win .fx-bg { background: radial-gradient(circle at 50% 30%, #6e0a24, #120308 70%); }
+    #fx.praise .fx-bg { background: radial-gradient(circle at 50% 40%, #fff7b0, #ff6ad5 45%, #4b00a8 90%); }
+    #fx.fail .fx-bg { background: #000; }
+    #fx.yes .fx-bg { background: radial-gradient(circle at 50% 40%, #ff3b3b, #5a0008 70%, #000); }
+    #fx .fx-rays {
+      position: absolute; inset: -20%;
+      background: repeating-conic-gradient(from 0deg, rgba(255,210,0,.45) 0 8deg, transparent 8deg 16deg);
+      animation: spinburst 14s linear infinite; opacity: .5;
+    }
+    #fx .fx-burst {
+      position: absolute; left: 50%; top: 45%; width: 140vmax; height: 140vmax; margin: -70vmax;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, #ff0040, #ffd000, #00ff88, #ff00cc, #ff0040);
+      animation: spinburst 8s linear infinite; opacity: .55;
+    }
+    #fx .fx-vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 40%, transparent 10%, rgba(0,0,0,.75) 70%);
+    }
+    #fx .fx-crown {
+      position: absolute; left: 50%; top: 8%; transform: translateX(-50%);
+      font-size: clamp(40px, 10vw, 84px); filter: drop-shadow(0 0 16px gold);
+    }
+    #fx .fx-feather, #fx .fx-spark, #fx .fx-fire {
+      position: absolute; border-radius: 50%;
+    }
+    #fx .fx-feather {
+      width: 18px; height: 28px; background: linear-gradient(180deg, #fff, #ddd);
+      border-radius: 50% 50% 40% 40%; animation: floatDown linear forwards; opacity: .85;
+    }
+    #fx .fx-spark {
+      width: 6px; height: 6px; background: #ffe27a; box-shadow: 0 0 10px #ffd000;
+      animation: sparkle ease-out forwards;
+    }
+    #fx .fx-fire {
+      width: 8px; height: 8px; background: #ffb000; box-shadow: 0 0 14px #ff4000;
+      animation: firework ease-out forwards;
+    }
+    @keyframes spinburst { to { transform: rotate(360deg); } }
+    @keyframes floatDown {
+      from { transform: translateY(-10vh) rotate(0); opacity: 0; }
+      15% { opacity: .9; }
+      to { transform: translateY(110vh) rotate(240deg); opacity: 0; }
+    }
+    @keyframes sparkle {
+      from { transform: scale(0); opacity: 1; }
+      to { transform: scale(1.8) translate(var(--dx), var(--dy)); opacity: 0; }
+    }
+    @keyframes firework {
+      from { transform: translate(0,0) scale(1); opacity: 1; }
+      to { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+    }
+    .toast {
+      position: fixed; left: 50%; top: 12%; transform: translateX(-50%); z-index: 70;
+      max-width: min(92vw, 520px); padding: 16px 18px; border-radius: 14px;
+      background: #111; color: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+      white-space: pre-wrap; display: none;
+    }
+    .toast.on { display: block; }
+
     @media (max-width: 860px) {
       main {
         grid-template-columns: 1fr;
@@ -203,6 +268,8 @@
     <h1>ゴミ・掃除当番ルーレット</h1>
     <p class="note">GitHub Pagesで動くサーバーなし版です。名簿と履歴はこのブラウザ内に保存されます。</p>
   </header>
+  <div id="fx" aria-hidden="true"><div class="fx-bg"></div><div class="fx-layer"></div></div>
+  <div id="toast" class="toast"></div>
 
   <main>
     <section class="roulette-area">
@@ -251,7 +318,20 @@
     const PENALTY_RATE = 10;
     const ROLE_GOMI = "gomi";
     const ROLE_SOUJI = "souji";
+    const TICK_DEG = 15;
     const COLORS = ["#ff9aa2", "#ffb7b2", "#ffdac1", "#e2f0cb", "#b5ead7", "#c7ceea", "#f8b195", "#f67280"];
+    // 今週枠（名簿本体はそのまま。帳尻合わせで同名の重複枠OK）
+    const THIS_WEEK_SLOTS = ["幡鎌", "若旅", "中田", "田中", "芝原", "陳", "白井", "幡鎌", "中田", "伊賀", "上出"];
+    const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10 };
+    const THIS_WEEK_EXEMPTIONS = [
+      { name: "田中", reason: "ゴミ捨てボランティア" },
+      { name: "中田", reason: "掃除ボランティア" },
+      { name: "海老澤", reason: "プリンタ破棄" },
+      { name: "若旅", reason: "プリンタ破棄" },
+      { name: "田中", reason: "プリンタ破棄" },
+      { name: "椎名", reason: "プリンタ破棄" },
+      { name: "田中", reason: "ゴミ捨てボランティア" },
+    ];
 
     const canvas = document.querySelector("#wheel");
     const ctx = canvas.getContext("2d");
@@ -268,6 +348,70 @@
     const resetCycleBtn = document.querySelector("#resetCycleBtn");
     const exportBtn = document.querySelector("#exportBtn");
     const importFile = document.querySelector("#importFile");
+    const toastEl = document.querySelector("#toast");
+
+    const SFX = {
+      tick: new Audio("./sounds/tick.mp3"),
+      click: new Audio("./sounds/click.mp3"),
+      win: new Audio("./sounds/win.mp3"),
+    };
+    Object.values(SFX).forEach((a) => { a.preload = "auto"; a.volume = 0.7; });
+    function playSfx(name, vol) {
+      const base = SFX[name];
+      if (!base) return;
+      try {
+        const a = base.cloneNode();
+        a.volume = vol == null ? base.volume : vol;
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      } catch (e) { /* ignore */ }
+    }
+
+    let fxTimer = null;
+    function clearFx() {
+      const fx = document.querySelector("#fx");
+      fx.className = "";
+      fx.querySelector(".fx-layer").innerHTML = "";
+      if (fxTimer) { clearTimeout(fxTimer); fxTimer = null; }
+    }
+    function spawnParticles(kind, n) {
+      const layer = document.querySelector("#fx .fx-layer");
+      for (let i = 0; i < n; i++) {
+        const el = document.createElement("div");
+        el.className = kind;
+        el.style.left = Math.random() * 100 + "%";
+        el.style.top = (kind === "fx-feather" ? -5 : 20 + Math.random() * 50) + "%";
+        el.style.setProperty("--dx", ((Math.random() - 0.5) * 220) + "px");
+        el.style.setProperty("--dy", ((Math.random() - 0.5) * 220) + "px");
+        el.style.animationDuration = (kind === "fx-feather" ? 4 + Math.random() * 4 : 0.6 + Math.random() * 0.9) + "s";
+        el.style.animationDelay = (Math.random() * 0.8) + "s";
+        layer.appendChild(el);
+      }
+    }
+    function withFx(mode, ms = 4500) {
+      clearFx();
+      const fx = document.querySelector("#fx");
+      fx.className = "on " + mode;
+      const layer = fx.querySelector(".fx-layer");
+      if (mode === "win") {
+        layer.innerHTML = '<div class="fx-rays"></div><div class="fx-vignette"></div>';
+        spawnParticles("fx-feather", 24); spawnParticles("fx-spark", 36);
+      } else if (mode === "praise") {
+        layer.innerHTML = '<div class="fx-burst"></div><div class="fx-rays"></div><div class="fx-crown">👑</div><div class="fx-vignette"></div>';
+        spawnParticles("fx-spark", 50);
+      } else if (mode === "fail") {
+        layer.innerHTML = "";
+      } else if (mode === "yes") {
+        layer.innerHTML = '<div class="fx-rays"></div><div class="fx-vignette"></div>';
+        spawnParticles("fx-fire", 40); spawnParticles("fx-spark", 30);
+      }
+      fxTimer = setTimeout(clearFx, ms);
+    }
+    function showToast(text, ms = 6000) {
+      toastEl.textContent = text;
+      toastEl.classList.add("on");
+      setTimeout(() => toastEl.classList.remove("on"), ms);
+    }
 
     let state = loadState();
     let confirmed = false;
@@ -277,21 +421,47 @@
     let answeredPrevious = new Set();
     let angle = 0;
     let spinning = false;
+    let lastTickSector = 0;
 
     function defaultState() {
       return {
-        members: ["山田太郎", "佐藤花子", "鈴木一郎"],
+        members: ["伊賀", "加藤", "海老澤", "上出", "中田", "陳", "椎名", "白井", "幡鎌", "山中", "谷津", "若旅", "芝原", "田中"],
         history: {
           done_gomi: [],
           done_souji: [],
           last_gomi_winner: null,
           last_souji_winner: null,
-          weights_gomi: {},
-          weights_souji: {},
+          weights_gomi: { "幡鎌": 10, "芝原": 10 },
+          weights_souji: { "幡鎌": 10, "芝原": 10 },
           pair_pending_souji: false,
           pair_session_excluded: []
         }
       };
+    }
+
+    function useWeekSlots() {
+      return THIS_WEEK_SLOTS.length > 0;
+    }
+    function applyThisWeekBoost() {
+      for (const [name, mul] of Object.entries(THIS_WEEK_BOOST)) {
+        state.history.weights_gomi[name] = Math.max(state.history.weights_gomi[name] || 1, mul);
+        state.history.weights_souji[name] = Math.max(state.history.weights_souji[name] || 1, mul);
+      }
+    }
+    function applyThisWeekExemptions() {
+      const onWheel = new Set(THIS_WEEK_SLOTS);
+      const applied = [], leftover = [];
+      const seen = new Set();
+      for (const e of THIS_WEEK_EXEMPTIONS) {
+        const k = e.name + "\0" + e.reason;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        if (onWheel.has(e.name)) {
+          excluded.add(e.name);
+          applied.push(e);
+        } else leftover.push(e);
+      }
+      return { applied, leftover };
     }
 
     function loadState() {
@@ -325,7 +495,12 @@
     }
 
     function roleWeights(role) {
-      return role === ROLE_GOMI ? state.history.weights_gomi : state.history.weights_souji;
+      const primary = role === ROLE_GOMI ? state.history.weights_gomi : state.history.weights_souji;
+      const merged = { ...primary };
+      for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
+        merged[m] = Math.max(merged[m] || 1, mul);
+      }
+      return merged;
     }
 
     function candidatePools() {
@@ -335,6 +510,13 @@
     }
 
     function activePool(role = drawRole) {
+      if (useWeekSlots()) {
+        let pool = THIS_WEEK_SLOTS.filter((name) => !excluded.has(name));
+        if (role === ROLE_SOUJI && sessionGomiWinner) {
+          pool = pool.filter((name) => name !== sessionGomiWinner);
+        }
+        return pool;
+      }
       const pools = candidatePools();
       let pool = role === ROLE_GOMI ? pools.gomi : pools.souji;
       pool = pool.filter((name) => !excluded.has(name));
@@ -346,7 +528,10 @@
 
     function orderedPool(role = drawRole) {
       const weights = roleWeights(role);
-      return activePool(role).slice().sort((a, b) => (weights[b] || 1) - (weights[a] || 1));
+      return activePool(role)
+        .map((m, i) => ({ m, i, w: weights[m] || 1 }))
+        .sort((a, b) => (b.w - a.w) || (a.i - b.i))
+        .map((x) => x.m);
     }
 
     function totalWeight(names, role = drawRole) {
@@ -428,6 +613,9 @@
     }
 
     function canRunBothDraws() {
+      if (useWeekSlots()) {
+        return new Set(THIS_WEEK_SLOTS.filter((m) => !excluded.has(m))).size >= 2;
+      }
       const gomi = activePool(ROLE_GOMI);
       const souji = activePool(ROLE_SOUJI);
       if (!gomi.length || !souji.length) return false;
@@ -452,16 +640,32 @@
       if (!confirmed || spinning || !activePool().length) return;
       spinning = true;
       spinBtn.disabled = true;
+      playSfx("click");
       let speed = 0.45 + Math.random() * 0.25;
       let frames = 0;
+      let deg = (angle * 180) / Math.PI;
+      lastTickSector = Math.floor(((deg % 360) + 360) % 360 / TICK_DEG);
       const timer = setInterval(() => {
-        angle = (angle + speed) % (Math.PI * 2);
+        const prevDeg = deg;
+        deg = (deg + speed * 57.3) % 360;
+        angle = (deg * Math.PI) / 180;
+        let from = Math.floor(prevDeg / TICK_DEG);
+        const to = Math.floor(deg / TICK_DEG);
+        const sectors = 360 / TICK_DEG;
+        let steps = 0;
+        while (from !== to && steps < 4) {
+          from = (from + 1) % sectors;
+          playSfx("tick", Math.min(0.85, 0.35 + speed * 2));
+          steps++;
+        }
+        lastTickSector = to;
         speed *= 0.985;
         frames += 1;
         drawWheel();
         if (frames > 90 && speed < 0.08) {
           clearInterval(timer);
           spinning = false;
+          playSfx("click");
           finishDraw();
         }
       }, 16);
@@ -470,12 +674,16 @@
     function finishDraw() {
       const winner = pickWinner();
       const names = orderedPool();
-      const rate = ((roleWeights(drawRole)[winner] || 1) / totalWeight(names)) * 100;
+      const weights = roleWeights(drawRole);
+      const winWeight = names.filter((m) => m === winner).reduce((s, m) => s + (weights[m] || 1), 0);
+      const rate = (winWeight / totalWeight(names)) * 100;
+      playSfx("win");
+      withFx("win", 5000);
 
       if (drawRole === ROLE_GOMI) {
         sessionGomiWinner = winner;
         drawRole = ROLE_SOUJI;
-        winnerEl.textContent = `ゴミ捨て当番\n【 ${winner} 】さん\n続けて掃除当番を抽選します。`;
+        winnerEl.textContent = `ゴミ捨て当番\n【 ${winner} 】さん（${rate.toFixed(1)}%）\n続けて掃除当番を抽選します。`;
         spinBtn.disabled = false;
       } else {
         applyExclusionBonus();
@@ -494,6 +702,7 @@
         drawRole = ROLE_GOMI;
         sessionGomiWinner = null;
         excluded.clear();
+        applyThisWeekExemptions();
         confirmBtn.disabled = false;
         spinBtn.disabled = true;
       }
@@ -522,9 +731,13 @@
       answeredPrevious.add(role);
       if (completed) {
         if (!state.history[doneKey].includes(last)) state.history[doneKey].push(last);
+        withFx("yes", 4000);
+        showToast(`任務完了！ いざ出陣！\n【 ${last} 】さん`);
       } else {
-        const weights = roleWeights(role);
-        weights[last] = (weights[last] || 1) * PENALTY_RATE;
+        const map = role === ROLE_GOMI ? state.history.weights_gomi : state.history.weights_souji;
+        map[last] = Math.max(map[last] || 1, PENALTY_RATE);
+        withFx("fail", 4000);
+        showToast(`任務未完了 / 終了\n${last}さん：今週${PENALTY_RATE}倍`);
       }
       saveState();
       checkCycleReset(true);
@@ -577,7 +790,9 @@
 
     function renderExcludeList() {
       const pools = candidatePools();
-      const candidates = [...new Set([...pools.gomi, ...pools.souji])];
+      const candidates = useWeekSlots()
+        ? [...new Set(THIS_WEEK_SLOTS)]
+        : [...new Set([...pools.gomi, ...pools.souji])];
       excludeList.innerHTML = "";
       if (!candidates.length) {
         excludeList.textContent = "候補がいません。前回確認か一周リセットをしてください。";
@@ -594,7 +809,10 @@
           else excluded.delete(name);
           render();
         };
-        label.append(input, document.createTextNode(name));
+        const boost = THIS_WEEK_BOOST[name] ? ` ×${THIS_WEEK_BOOST[name]}` : "";
+        const dup = useWeekSlots() && THIS_WEEK_SLOTS.filter((n) => n === name).length > 1
+          ? `（枠${THIS_WEEK_SLOTS.filter((n) => n === name).length}）` : "";
+        label.append(input, document.createTextNode(name + boost + dup));
         excludeList.append(label);
       });
     }
@@ -620,7 +838,9 @@
 
     function renderStatus() {
       const pools = candidatePools();
-      statusEl.textContent = `総メンバー：${state.members.length}人 / ゴミ残り：${pools.gomi.length} / 掃除残り：${pools.souji.length}`;
+      statusEl.textContent = useWeekSlots()
+        ? `総メンバー：${state.members.length}人 / 今週枠：${THIS_WEEK_SLOTS.length}（重複込） / 抽選枠：${activePool().length} / 除外：${excluded.size}`
+        : `総メンバー：${state.members.length}人 / ゴミ残り：${pools.gomi.length} / 掃除残り：${pools.souji.length}`;
     }
 
     function render() {
@@ -672,6 +892,7 @@
       drawRole = ROLE_GOMI;
       sessionGomiWinner = null;
       excluded.clear();
+      applyThisWeekExemptions();
       confirmBtn.disabled = false;
       spinBtn.disabled = true;
       winnerEl.textContent = "除外を選び直しました。";
@@ -704,6 +925,20 @@
       }
     };
 
+    applyThisWeekBoost();
+    const ex = applyThisWeekExemptions();
+    if (ex.applied.length || ex.leftover.length) {
+      let msg = "";
+      if (ex.applied.length) {
+        msg += "【今週ルーレットから除外】\n" + ex.applied.map((e) => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+      }
+      if (ex.leftover.length) {
+        msg += "【次週へ持ち越し】\n" + ex.leftover.map((e) => `・${e.name}（${e.reason}）`).join("\n");
+      } else {
+        msg += "次週へ持ち越す免除はありません。";
+      }
+      showToast(msg, 9000);
+    }
     render();
   </script>
 </body>
