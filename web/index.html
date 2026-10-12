@@ -20,18 +20,21 @@
   html, body { margin: 0; height: 100%; overflow: hidden; }
   body {
     color: #fff;
+    color-scheme: dark;
     font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
     background:
-      radial-gradient(circle at 12% 8%, rgba(255, 60, 160, .45), transparent 38%),
-      radial-gradient(circle at 90% 20%, rgba(255, 190, 0, .28), transparent 36%),
-      radial-gradient(circle at 50% 100%, rgba(150, 0, 20, .55), transparent 50%),
-      linear-gradient(160deg, #2a0838 0%, #12031d 55%, #070108 100%);
+      radial-gradient(circle at 12% 8%, rgba(255, 80, 180, .55), transparent 40%),
+      radial-gradient(circle at 90% 20%, rgba(255, 210, 40, .38), transparent 38%),
+      radial-gradient(circle at 50% 100%, rgba(200, 20, 40, .6), transparent 52%),
+      linear-gradient(160deg, #3a0c4a 0%, #1a0528 50%, #0c0214 100%);
     background-attachment: fixed;
     line-height: 1.35;
     display: flex; flex-direction: column;
   }
-  body::before { /* きらきら */
-    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .55;
+  body::before { /* きらきら（Chromeでも加算で明るく） */
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    opacity: .85;
+    mix-blend-mode: screen;
     background-image:
       radial-gradient(2px 2px at 20px 30px, #fff, transparent),
       radial-gradient(2px 2px at 120px 90px, #ffe27a, transparent),
@@ -41,6 +44,16 @@
     background-size: 340px 210px;
     animation: twinkle 3.2s ease-in-out infinite alternate;
   }
+  body::after { /* 全体の加算ハイライト（Chromeの暗さを補正） */
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    mix-blend-mode: screen;
+    opacity: .35;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255, 200, 80, .55), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 15% 80%, rgba(255, 60, 140, .4), transparent 55%),
+      radial-gradient(ellipse 45% 35% at 90% 70%, rgba(255, 120, 40, .35), transparent 50%);
+  }
+  header, main { position: relative; z-index: 1; }
   @keyframes twinkle { from { opacity: .25; } to { opacity: .8; } }
 
   header {
@@ -58,8 +71,18 @@
     letter-spacing: .06em; line-height: 1.15;
     background: linear-gradient(180deg, #fffef0 0%, #ffe27a 30%, #ffd000 48%, #c98a00 55%, #fff3a8 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 18px rgba(255, 200, 0, .95)) drop-shadow(0 0 28px rgba(255, 70, 70, .55));
+    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 14px rgba(255, 220, 80, 1)) drop-shadow(0 0 32px rgba(255, 90, 40, .85));
   }
+  /* Chrome: filter影が弱いとき用の加算アウトライン */
+  h1::after {
+    content: attr(data-title);
+    position: absolute; left: 0; right: 0; top: 0;
+    background: inherit; -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: blur(10px) brightness(1.4);
+    mix-blend-mode: screen;
+    opacity: .55; pointer-events: none; z-index: -1;
+  }
+  header { isolation: isolate; }
 
   main {
     flex: 1 1 auto; min-height: 0;
@@ -449,7 +472,7 @@
 <body>
 <header>
   <span class="tag">FINAL CHANCE</span>
-  <h1>ゴミ捨て・掃除黄金戦士 ルーレット</h1>
+  <h1 data-title="ゴミ捨て・掃除黄金戦士 ルーレット">ゴミ捨て・掃除黄金戦士 ルーレット</h1>
 </header>
 
 <main>
@@ -593,7 +616,8 @@
   ];
 
   const $ = id => document.getElementById(id);
-  const canvas = $("wheel"), ctx = canvas.getContext("2d");
+  const canvas = $("wheel");
+  const ctx = canvas.getContext("2d", { alpha: true, colorSpace: "srgb" }) || canvas.getContext("2d");
 
   // ---------- 効果音 ----------
   const SFX = {
@@ -1105,22 +1129,44 @@
       ctx.beginPath(); ctx.arc(cx, cy, r1, 0, Math.PI * 2); ctx.arc(cx, cy, r0, 0, Math.PI * 2, true);
       ctx.fillStyle = g; ctx.fill();
     };
+    // 外周ブルーム（加算：Chromeでも影だけに頼らず明るく）
     ctx.save();
-    ctx.shadowColor = "rgba(255,60,40,.8)"; ctx.shadowBlur = 40;
-    ring(R * 0.90, R, [[0, "#8a5a00"], [.25, "#fff3a8"], [.5, "#d79a00"], [.8, "#fff0a0"], [1, "#7a4a00"]]);
+    ctx.globalCompositeOperation = "lighter";
+    const bloom = ctx.createRadialGradient(cx, cy, R * 0.72, cx, cy, R * 1.08);
+    bloom.addColorStop(0, "rgba(255, 80, 40, 0)");
+    bloom.addColorStop(0.55, "rgba(255, 90, 40, .22)");
+    bloom.addColorStop(0.82, "rgba(255, 200, 60, .38)");
+    bloom.addColorStop(1, "rgba(255, 60, 40, 0)");
+    ctx.beginPath(); ctx.arc(cx, cy, R * 1.08, 0, Math.PI * 2);
+    ctx.fillStyle = bloom; ctx.fill();
     ctx.restore();
+
+    ring(R * 0.90, R, [[0, "#8a5a00"], [.25, "#fff3a8"], [.5, "#d79a00"], [.8, "#fff0a0"], [1, "#7a4a00"]]);
     ring(R * 0.82, R * 0.90, [[0, "#5a0008"], [.3, "#e0101a"], [.6, "#ff5a4a"], [1, "#7a0010"]]);
 
-    // 電飾（ちかちか）
+    // 電飾（ちかちか）— 点灯は加算合成で重ねる
     const n = 36, t = (ts || 0) / 1000;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2, rr = R * 0.86;
       const on = ((i + Math.floor(t * (spinning ? 14 : 4))) % 2 === 0);
       const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
-      ctx.beginPath(); ctx.arc(x, y, R * 0.02, 0, Math.PI * 2);
+      const br = R * 0.02;
+      ctx.beginPath(); ctx.arc(x, y, br, 0, Math.PI * 2);
       ctx.fillStyle = on ? "#fffbd0" : "#a06a00";
-      if (on) { ctx.shadowColor = "#ffe27a"; ctx.shadowBlur = 18; } else { ctx.shadowBlur = 0; }
-      ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fill();
+      if (on) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const halo = ctx.createRadialGradient(x, y, 0, x, y, br * 4.5);
+        halo.addColorStop(0, "rgba(255, 255, 220, .95)");
+        halo.addColorStop(0.35, "rgba(255, 220, 80, .65)");
+        halo.addColorStop(1, "rgba(255, 80, 40, 0)");
+        ctx.beginPath(); ctx.arc(x, y, br * 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = halo; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, br * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, .9)"; ctx.fill();
+        ctx.restore();
+      }
     }
     // 内側の黄色いリング
     ring(rWheel, R * 0.815, [[0, "#fff6b0"], [.5, "#ffd000"], [1, "#a06a00"]]);
@@ -1173,17 +1219,28 @@
     gl.addColorStop(0, "rgba(255,255,255,.28)"); gl.addColorStop(.4, "rgba(255,255,255,.05)"); gl.addColorStop(1, "rgba(0,0,0,.25)");
     ctx.beginPath(); ctx.arc(cx, cy, rWheel, 0, Math.PI * 2); ctx.fillStyle = gl; ctx.fill();
 
-    // 針（金のアロー）
+    // 針（金のアロー）＋加算グロー
     const rad = -angle * Math.PI / 180;
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(rad);
     const L = rWheel * 0.96, bw = rWheel * 0.07;
-    ctx.shadowColor = "rgba(255,230,120,.95)"; ctx.shadowBlur = spinning ? 36 : 18;
+    const arrowPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(L, 0); ctx.lineTo(L - bw * 2.2, -bw * 1.4); ctx.lineTo(L - bw * 1.6, -bw * .35);
+      ctx.lineTo(0, -bw * .35); ctx.lineTo(0, bw * .35); ctx.lineTo(L - bw * 1.6, bw * .35); ctx.lineTo(L - bw * 2.2, bw * 1.4);
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    arrowPath();
+    ctx.fillStyle = spinning ? "rgba(255, 220, 80, .55)" : "rgba(255, 200, 60, .32)";
+    ctx.shadowColor = "rgba(255, 230, 120, 1)";
+    ctx.shadowBlur = spinning ? 28 : 16;
+    ctx.fill();
+    ctx.restore();
     const ng = ctx.createLinearGradient(0, -bw, 0, bw);
     ng.addColorStop(0, "#fff7c0"); ng.addColorStop(.5, "#f5b800"); ng.addColorStop(1, "#8a5a00");
-    ctx.beginPath();
-    ctx.moveTo(L, 0); ctx.lineTo(L - bw * 2.2, -bw * 1.4); ctx.lineTo(L - bw * 1.6, -bw * .35);
-    ctx.lineTo(0, -bw * .35); ctx.lineTo(0, bw * .35); ctx.lineTo(L - bw * 1.6, bw * .35); ctx.lineTo(L - bw * 2.2, bw * 1.4);
-    ctx.closePath(); ctx.fillStyle = ng; ctx.fill();
+    arrowPath();
+    ctx.fillStyle = ng; ctx.fill();
     ctx.lineWidth = W * 0.004; ctx.strokeStyle = "#5a0010"; ctx.stroke();
     ctx.restore();
 
