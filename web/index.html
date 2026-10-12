@@ -1803,7 +1803,6 @@
     computePools(); renderAll();
     refreshArchiveStatus();
     // 先に前回のゴミ・掃除の実施確認（達成済み処理より前）
-    loadExemptCycles();
     if (await checkPrevious(ROLE_GOMI) === "skip") { busy = false; renderAll(); return; }
     if (await checkPrevious(ROLE_SOUJI) === "skip") { busy = false; renderAll(); return; }
     let restarted = false;
