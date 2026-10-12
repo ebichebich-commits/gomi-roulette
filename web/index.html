@@ -110,6 +110,11 @@
   /* 今週の1枚 / クイズ */
   #weeklyTitle { font-size: clamp(18px, 2vw, 26px); }
   #weeklyTitle.quiz { color: #ff6a6a; text-shadow: 0 0 12px rgba(255, 40, 40, .9); }
+  #weeklyTitle.ai { color: #ffe27a; text-shadow: 0 0 12px rgba(255, 180, 0, .9); font-size: clamp(15px, 1.5vw, 22px); }
+  #weeklyQuizNote {
+    text-align: center; font-weight: 900; color: #ffb4b4; margin: 0 0 8px;
+    text-shadow: 0 0 8px rgba(255, 40, 40, .8); font-size: clamp(13px, 1.3vw, 18px);
+  }
   .bubble {
     position: relative; margin: 0 0 14px; padding: 14px 12px; border-radius: 12px;
     background: linear-gradient(180deg, #fff, #ffeab0); color: #2a0010; font-weight: 800;
@@ -504,6 +509,7 @@
 <main>
   <aside class="panel" id="weeklyPanel">
     <h2 id="weeklyTitle">今週の1枚！！</h2>
+    <div id="weeklyQuizNote" hidden>考えるだけ無駄かも★</div>
     <div id="weeklyQuiz" class="bubble" hidden></div>
     <img id="weeklyImg" alt="" hidden>
     <div id="weeklyCaption"></div>
@@ -1257,8 +1263,11 @@
   function renderWeekly() {
     const w = weekly, t = $("weeklyTitle"), q = $("weeklyQuiz"), img = $("weeklyImg");
     const hasQuiz = !!(w && w.quiz_question);
-    t.textContent = hasQuiz ? "今週のクイズ！！" : "今週の1枚！！";
-    t.classList.toggle("quiz", hasQuiz);
+    const aiQuiz = hasQuiz && w.quiz_source === "ai";
+    t.textContent = aiQuiz ? "田中作★低トークンAIクイズ" : (hasQuiz ? "今週のクイズ！！" : "今週の1枚！！");
+    t.classList.toggle("quiz", hasQuiz && !aiQuiz);
+    t.classList.toggle("ai", aiQuiz);
+    $("weeklyQuizNote").hidden = !aiQuiz;
     q.hidden = !hasQuiz;
     if (hasQuiz) q.textContent = w.quiz_question;
     if (w && w.photos && w.photos.length) {

@@ -14,6 +14,7 @@ import csv
 import json
 import mimetypes
 import os
+import random
 import subprocess
 import threading
 from datetime import datetime
@@ -32,6 +33,40 @@ CSV_FILE = "members.csv"
 DATA_FILE = "duty_history.json"
 ARCHIVE_DIR = "history_archive"
 ARCHIVE_META = "history_archive_meta.json"
+AI_QUIZ_FILE = "ai_quiz_queue.json"
+# 指定クイズ（quiz.txt）が無い週だけ使う。一度出したら列の末尾へ回す。
+AI_QUIZZES = [
+    {"q": "いつも留守なのに働いている人は？", "a": "留守番"},
+    {"q": "どれだけ走っても前に進まない乗り物は？", "a": "ルームランナー"},
+    {"q": "毎日会社にいるのに給料をもらわない人は？", "a": "社長の写真"},
+    {"q": "走ると怒られる場所は？", "a": "プールサイド"},
+    {"q": "いつも上から目線の野菜は？", "a": "高菜"},
+    {"q": "一番口が堅い文房具は？", "a": "のり（口を封じる）"},
+    {"q": "何度負けても兜を脱がない虫は？", "a": "カブトムシ"},
+    {"q": "毎日サボっているのに1日2回正しい時計は？", "a": "止まった時計"},
+    {"q": "どんなに賢くても解けない問題は？", "a": "まだ出題されていない問題"},
+    {"q": "どれだけ頑張っても1位になれない人は？", "a": "審判"},
+    {"q": "何度注意されても、同じことを繰り返す鳥は？", "a": "オウム（オウム返し）"},
+    {"q": "医者が一番診察したくない楽器は？", "a": "オルガン（悪寒＝おかん、とは違うので注意）"},
+    {"q": "いつも裁判で負けている動物は？", "a": "カバ（かばう側だから）"},
+    {"q": "どんなに急いでも、絶対に走らない駅は？", "a": "停車駅"},
+    {"q": "いつも人の秘密をばらす海の生き物は？", "a": "カニ（口が軽いという設定）"},
+    {"q": "毎日学校にいるのに、絶対に卒業できないのは？", "a": "校長先生"},
+    {"q": "一番礼儀正しい果物は？", "a": "レモン（礼問、という語呂）"},
+    {"q": "勉強するほど軽くなるものは？", "a": "問題集（解いた問題の重荷）"},
+    {"q": "何もしていないのに毎日クビになるものは？", "a": "シャツ（首から脱ぐから）"},
+    {"q": "絶対に嘘をつけない楽器は？", "a": "正直なラッパ（ラッパを吹く＝大げさに話す、の逆）"},
+    {"q": "世界で一番謝っている国は？", "a": "ソーリー（韓国のソウルに似ているという語呂）"},
+    {"q": "どんなに偉くても頭を下げる人は？", "a": "美容師（シャンプーのとき）"},
+    {"q": "誰よりも早く出社に来るのに、仕事をしない人は？", "a": "社員証の写真"},
+    {"q": "どれだけ食べても太らない料理は？", "a": "食品サンプル"},
+    {"q": "絶対に浮気しない文房具は？", "a": "一途な定規（まっすぐだから）"},
+    {"q": "いつも人の話を聞かない野菜は？", "a": "キクイモ（聞く芋、という逆説）"},
+    {"q": "何回殴られても絶対に怒らない人は？", "a": "サンドバッグの絵"},
+    {"q": "一番頭が良さそうな魚は？", "a": "博士の帽子をかぶった魚"},
+    {"q": "どれだけお金を積んでも買えない本は？", "a": "売り切れた本"},
+    {"q": "いつも他人の名前で呼ばれる人は？", "a": "モノマネ芸人"},
+]
 ARCHIVE_KEEP_DAYS = 180
 QUIZ_FILE_NAME = "quiz.txt"
 QUIZ_ANSWER_IMAGE_NAMES = ("quiz-answer.png", "quiz-answer.jpg", "quiz-answer.jpeg", "quiz-answer.gif")
@@ -167,15 +202,93 @@ class App:
     def url(self, p: Path) -> str:
         return "/api/file/" + "/".join(quote(s) for s in p.relative_to(self.pictures).as_posix().split("/"))
 
+    def _ai_quiz_path(self) -> Path:
+        return self.data_dir / AI_QUIZ_FILE
+
+    def _read_ai_queue(self) -> tuple[dict, bool]:
+        p = self._ai_quiz_path()
+        n = len(AI_QUIZZES)
+        fresh = not p.is_file()
+        raw = {}
+        if not fresh:
+            try:
+                loaded = json.loads(p.read_text(encoding="utf-8-sig"))
+                if isinstance(loaded, dict):
+                    raw = loaded
+            except (OSError, ValueError):
+                fresh = True
+        order = [i for i in (raw.get("order") or []) if isinstance(i, int) and 0 <= i < n]
+        seen = set(order)
+        for i in range(n):
+            if i not in seen:
+                order.append(i)
+        if fresh or not raw.get("order"):
+            order = list(range(n))
+            random.shuffle(order)
+            fresh = True
+        by_week = {}
+        src = raw.get("by_week") if isinstance(raw.get("by_week"), dict) else {}
+        for k, v in src.items():
+            if isinstance(v, int) and 0 <= v < n:
+                by_week[str(k)] = v
+        return {"order": order, "by_week": by_week}, fresh
+
+    def _write_ai_queue(self, state: dict) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self._ai_quiz_path().write_text(
+            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def assign_ai_quiz(self, week_key: str) -> tuple[str, str]:
+        """同じ週は同じ問題。初めての週だけ先頭を出し、その問題を列の最後へ回す。"""
+        with _write_lock:
+            state, need_write = self._read_ai_queue()
+            by_week = state["by_week"]
+            order = state["order"]
+            if week_key in by_week:
+                idx = by_week[week_key]
+            else:
+                idx = order[0]
+                state["order"] = order[1:] + [idx]
+                by_week[week_key] = idx
+                if len(by_week) > 80:
+                    for k in sorted(by_week)[:-80]:
+                        by_week.pop(k, None)
+                need_write = True
+            if need_write:
+                self._write_ai_queue(state)
+        item = AI_QUIZZES[idx]
+        return item["q"], item["a"]
+
+    def _folder_is_this_week(self, folder: Path | None) -> bool:
+        if not folder:
+            return False
+        parsed = parse_date_folder(folder.name)
+        if not parsed:
+            return False
+        folder_day = datetime(*parsed)
+        today = datetime.now()
+        return folder_day.isocalendar()[:2] == today.isocalendar()[:2]
+
+    def resolve_quiz(self) -> dict:
+        """今週フォルダに quiz.txt があればそちら。無ければ田中作AIクイズ。"""
+        t = self.weekly_dir()
+        if t and self._folder_is_this_week(t):
+            q, a = read_weekly_quiz(t)
+            if q and a:
+                img = next((self.url(t / n) for n in QUIZ_ANSWER_IMAGE_NAMES if (t / n).is_file()), None)
+                return {"question": q, "answer": a, "source": "week", "image": img}
+        week_key = datetime.now().strftime("%G-W%V")
+        q, a = self.assign_ai_quiz(week_key)
+        return {"question": q, "answer": a, "source": "ai", "image": None}
+
     def data(self) -> dict:
         t = self.weekly_dir()
-        photos, q, a, ai = [], None, None, False
+        photos = []
         if t:
             for p in sorted(t.iterdir()):
                 if p.is_file() and p.suffix.lower() in SUPPORTED_IMAGE_EXTS and p.name.lower() not in QUIZ_ANSWER_IMAGE_NAMES:
                     photos.append(self.url(p))
-            q, a = read_weekly_quiz(t)
-            ai = any((t / n).is_file() for n in QUIZ_ANSWER_IMAGE_NAMES)
+        quiz = self.resolve_quiz()
         return {
             "ok": True,
             "members": read_members(self.data_dir / CSV_FILE),
@@ -183,18 +296,15 @@ class App:
             "week_folder": t.name if t else None,
             "photos": photos,
             # 答えは抽選が終わるまで送らない（/api/quiz-answer で取得）
-            "quiz_question": q if (q and a) else None,
-            "quiz_has_answer": bool(q and a),
-            "has_answer_image": ai,
+            "quiz_question": quiz["question"],
+            "quiz_has_answer": True,
+            "quiz_source": quiz["source"],
+            "has_answer_image": bool(quiz["image"]),
         }
 
     def quiz_answer(self) -> dict:
-        t = self.weekly_dir()
-        q, a = read_weekly_quiz(t)
-        if not (q and a):
-            return {"ok": True, "answer": None, "image": None}
-        img = next((self.url(t / n) for n in QUIZ_ANSWER_IMAGE_NAMES if (t / n).is_file()), None)
-        return {"ok": True, "answer": a, "image": img}
+        quiz = self.resolve_quiz()
+        return {"ok": True, "answer": quiz["answer"], "image": quiz["image"], "source": quiz["source"]}
 
     def _archive_root(self) -> Path:
         return self.data_dir / ARCHIVE_DIR
