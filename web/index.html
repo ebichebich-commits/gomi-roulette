@@ -1222,7 +1222,17 @@
       l.append(c, document.createTextNode(m));
       box.appendChild(l);
     });
-    if (!list.length) box.textContent = "自己申告の対象がいません。";
+    const locked = [];
+    volunteerExempt.forEach(m => locked.push([m, "ボランティア免除"]));
+    luckyRest.forEach(m => { if (!volunteerExempt.has(m)) locked.push([m, "ラッキーお休み"]); });
+    locked.forEach(([m, tag]) => {
+      const l = document.createElement("label");
+      const c = document.createElement("input");
+      c.type = "checkbox"; c.checked = true; c.disabled = true;
+      l.append(c, document.createTextNode(`${m}（${tag}）`));
+      box.appendChild(l);
+    });
+    if (!list.length && !locked.length) box.textContent = "自己申告の対象がいません。";
   }
   function renderInfo() {
     $("info").textContent = confirmed
