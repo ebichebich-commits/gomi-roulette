@@ -802,6 +802,7 @@
   let prevUnfinished = new Set();
   let forgetCounts = {}; // やり忘れ回数（一周終了時に ×3/10 を回数ぶん）
   let volunteerExempt = new Set();
+  let exemptCyclesLeft = {};
   let luckyRest = new Set();
   let candG = [], candS = [], candidates = [];
   let weeklyExcluded = new Set(); // 自己申告：今週だけルーレット不参加
@@ -999,8 +1000,9 @@
     const extraLabel = role === ROLE_GOMI ? "ゴミ袋を替えた" : "掃除機の中身を捨てた";
     const boost = THIS_WEEK_BOOST[last] ?? 1;
     const r = await modal(
-      `<div class="head">前回の${duty}当番は【 ${esc(last)} 】さんでした。</div><div class="head" style="margin-top:8px">任務（${duty}）は完了しましたか？</div>`,
-      [{ label: "はい（完了した）", value: "yes" }, { label: "いいえ（まだ）", value: "no", cls: "red" }, { label: extraLabel, value: "extra", cls: "dark" }]);
+      `<div class="head">前回の${duty}当番は【 ${esc(last)} 】さんでした。</div><div class="head" style="margin-top:8px">任務（${duty}）は完了しましたか？</div><div class="body">× で確認をスキップすると、うしろの「前の週に戻す」を押せます。</div>`,
+      [{ label: "× スキップ", value: "skip", cls: "dark" }, { label: "はい（完了した）", value: "yes" }, { label: "いいえ（まだ）", value: "no", cls: "red" }, { label: extraLabel, value: "extra", cls: "dark" }]);
+    if (r === "skip") return "skip";
     const wmap = role === ROLE_GOMI ? wG : wS;
     if (r === "yes" || r === "extra") {
       if (!done.includes(last)) done.push(last);
@@ -1102,6 +1104,45 @@
     });
     return lines;
   }
+  function contribCycleMap() {
+    const c = {};
+    for (const e of ROOM_CONTRIBUTIONS) c[e.name] = (c[e.name] || 0) + 1;
+    return c;
+  }
+  /** 保存済みならその残り回数。この周で免除済みなら、回数から1を引いた残りを持つ */
+  function loadExemptCycles() {
+    if (hist.exempt_cycles_inited && hist.exempt_cycles_left && typeof hist.exempt_cycles_left === "object") {
+      exemptCyclesLeft = { ...hist.exempt_cycles_left };
+      return;
+    }
+    const base = contribCycleMap();
+    exemptCyclesLeft = {};
+    const usedThisCycle = (hist.volunteer_exempt || []).length > 0;
+    for (const [name, n] of Object.entries(base)) {
+      exemptCyclesLeft[name] = usedThisCycle ? Math.max(0, n - 1) : n;
+    }
+    hist.exempt_cycles_inited = true;
+    hist.exempt_cycles_left = { ...exemptCyclesLeft };
+  }
+  /** 残り回数がある人をこの周は免除し、回数を1減らす。田中は3回なので、初回のあと2周残る */
+  function consumeVolunteerCycles() {
+    volunteerExempt = new Set();
+    const applied = [];
+    for (const [name, raw] of Object.entries(exemptCyclesLeft)) {
+      const left = Number(raw) || 0;
+      if (left <= 0 || !members.includes(name)) continue;
+      volunteerExempt.add(name);
+      markAlreadyDone(name);
+      weeklyExcluded.add(name);
+      exemptCyclesLeft[name] = left - 1;
+      applied.push({ name, leftAfter: exemptCyclesLeft[name] });
+    }
+    hist.exempt_cycles_left = { ...exemptCyclesLeft };
+    hist.exempt_cycles_inited = true;
+    hist.volunteer_exempt = [...volunteerExempt];
+    return applied;
+  }
+
   async function celebrateAndRestart(lucky) {
     await splashFx("perfect", "これは勝利最も完璧です", 2800);
     const nameHtml = lucky.map(n => `<div class="big gold-name">【 ${esc(n)} 】</div>`).join("");
@@ -1120,12 +1161,8 @@
     doneGomi = []; doneSouji = [];
     lastG = ""; lastS = "";
     weeklyExcluded = new Set();
-    const vols = [...new Set(ROOM_CONTRIBUTIONS.map(e => e.name))].filter(n => members.includes(n));
-    for (const name of vols) {
-      volunteerExempt.add(name);
-      markAlreadyDone(name);
-      weeklyExcluded.add(name);
-    }
+    const applied = consumeVolunteerCycles();
+    const vols = applied.map(a => a.leftAfter > 0 ? `${a.name}（この周＋あと${a.leftAfter}周）` : `${a.name}（この周で最後）`);
     hist.week_slots_finished = true;
     hist.week_remaining_slots = [];
     hist.forget_counts = {};
@@ -1155,6 +1192,9 @@
     await info("祝！一周完了", "全員が一度ずつ当番に割り当てられました！\n前回分の確認を反映して、新しい周を開始します。\n未実施の当番がある人は、倍率アップのまま次のルーレットに残ります。");
     doneGomi = []; doneSouji = [];
     lastG = ""; lastS = "";
+    alreadyDoneExempt = new Set();
+    weeklyExcluded = new Set();
+    consumeVolunteerCycles();
   }
 
   function applyExclusionBonus() {
@@ -1194,7 +1234,10 @@
       const bar = Math.max(4, Math.round((r.w / maxW) * 100));
       let st = "抽選対象";
       if (luckyRest.has(r.m)) st = "ラッキーお休み";
-      else if (volunteerExempt.has(r.m)) st = "ボランティア免除";
+      else if (volunteerExempt.has(r.m)) {
+        const more = exemptCyclesLeft[r.m] || 0;
+        st = more > 0 ? `ボランティア免除（あと${more}周）` : "ボランティア免除（この周で最後）";
+      }
       else if (alreadyDoneExempt.has(r.m)) st = "達成済み（実施済み免除）";
       else if (weeklyExcluded.has(r.m)) st = "自己申告：今週免除";
       else if (sessionG === r.m) st = "今回のゴミ当番";
@@ -1233,7 +1276,10 @@
       box.appendChild(l);
     });
     const locked = [];
-    volunteerExempt.forEach(m => locked.push([m, "ボランティア免除"]));
+    volunteerExempt.forEach(m => {
+      const more = exemptCyclesLeft[m] || 0;
+      locked.push([m, more > 0 ? `ボランティア免除・あと${more}周` : "ボランティア免除・この周で最後"]);
+    });
     luckyRest.forEach(m => { if (!volunteerExempt.has(m)) locked.push([m, "ラッキーお休み"]); });
     locked.forEach(([m, tag]) => {
       const l = document.createElement("label");
@@ -1593,6 +1639,8 @@
     d.room_contrib_applied = !!hist.room_contrib_applied;
     d.forget_counts = { ...forgetCounts };
     d.volunteer_exempt = [...volunteerExempt];
+    d.exempt_cycles_left = { ...exemptCyclesLeft };
+    d.exempt_cycles_inited = true;
     d.lucky_rest = [...luckyRest];
     alreadyDoneExempt.forEach(m => {
       if (!d.done_gomi.includes(m)) d.done_gomi.push(m);
@@ -1737,6 +1785,7 @@
     forgetCounts = { ...(hist.forget_counts || {}) };
     volunteerExempt = new Set(hist.volunteer_exempt || []);
     luckyRest = new Set(hist.lucky_rest || []);
+    loadExemptCycles();
     const remSlots = Array.isArray(hist.week_remaining_slots) ? hist.week_remaining_slots.filter(Boolean) : [];
     weekSlotsContinue = remSlots.length > 0;
     weekSlotsActive = weekSlotsContinue || !hist.week_slots_finished;
@@ -1754,8 +1803,9 @@
     computePools(); renderAll();
     refreshArchiveStatus();
     // 先に前回のゴミ・掃除の実施確認（達成済み処理より前）
-    await checkPrevious(ROLE_GOMI);
-    await checkPrevious(ROLE_SOUJI);
+    loadExemptCycles();
+    if (await checkPrevious(ROLE_GOMI) === "skip") { busy = false; renderAll(); return; }
+    if (await checkPrevious(ROLE_SOUJI) === "skip") { busy = false; renderAll(); return; }
     let restarted = false;
     if (weekSlotsActive && !weekSlotsContinue) {
       const ex = applyAlreadyDoneExemptions();
