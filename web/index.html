@@ -67,6 +67,7 @@
     color: #4a0010; box-shadow: 0 0 14px rgba(255, 210, 0, .7);
   }
   h1 {
+    position: relative;
     margin: 0; font-size: clamp(34px, 4.8vw, 64px); font-weight: 900; font-style: italic;
     letter-spacing: .06em; line-height: 1.15;
     background: linear-gradient(180deg, #fffef0 0%, #ffe27a 30%, #ffd000 48%, #c98a00 55%, #fff3a8 100%);
@@ -530,8 +531,9 @@
   // 残メンバー + 帳尻合わせ追加（幡鎌・中田は重複枠）
   const THIS_WEEK_SLOTS = ["幡鎌", "若旅", "中田", "田中", "芝原", "陳", "白井", "幡鎌", "中田", "伊賀", "上出"];
   const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10, "上出": 3 };
-  // すでに実施済み（ボランティア等）→ この周は達成済み扱い（右パネルの自己申告とは別）
-  const ALREADY_DONE_EXEMPTIONS = [
+  // 部屋への貢献 → 同名が複数あればその回数だけ ×0.9（保存時に1回だけ反映）
+  // 今週枠にいる人は同時に「達成済み扱い」でルーレット対象外
+  const ROOM_CONTRIBUTIONS = [
     { name: "田中", reason: "ゴミ捨てボランティア" },
     { name: "中田", reason: "掃除ボランティア" },
     { name: "海老澤", reason: "プリンタ破棄" },
@@ -540,6 +542,8 @@
     { name: "椎名", reason: "プリンタ破棄" },
     { name: "田中", reason: "ゴミ捨てボランティア" },
   ];
+  const ALREADY_DONE_EXEMPTIONS = ROOM_CONTRIBUTIONS;
+  const CONTRIB_MUL = 0.9;
   const TICK_DEG = 20;
   const TICK_COOLDOWN_MS = 100;
   const FX_PHRASES = {
@@ -763,8 +767,10 @@
   let lastTickSector = 0;
 
   const key = (role, m) => role + "\u0000" + m;
-  let weekSlotsActive = true; // 保存後は false（次週は通常プール）
-  const useWeekSlots = () => weekSlotsActive && THIS_WEEK_SLOTS.length > 0;
+  let weekSlotsActive = true; // 枠が残っている間は true
+  let weekSlotsContinue = false; // 残り枠の続き（幡鎌/芝原の初回確認はしない）
+  let activeWeekSlots = THIS_WEEK_SLOTS; // 初回枠 or 持ち越し残り
+  const useWeekSlots = () => weekSlotsActive && activeWeekSlots.length > 0;
 
   // ---------- モーダル ----------
   function modal(html, buttons, cls = "") {
@@ -791,17 +797,6 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const info = (title, text) => modal(`<div class="head">${esc(title)}</div><div class="body">${esc(text)}</div>`, [{ label: "OK", value: true }]);
 
-  /** 今週枠中のみ画面上のブースト（保存データには書かない） */
-  function weekBoostOf(m) {
-    return useWeekSlots() ? (THIS_WEEK_BOOST[m] ?? 1) : 1;
-  }
-  /** 総合危険度：ゴミ／掃除の高い方（今週枠ブースト＋未実施積み上げ） */
-  function personalWeight(m) {
-    const base = weekBoostOf(m);
-    const gw = wG[m] != null ? Number(wG[m]) : 1;
-    const sw = wS[m] != null ? Number(wS[m]) : 1;
-    return Math.max(gw, sw, base);
-  }
   function effectiveWeight(role, m) {
     return roleWeights(role)[m] ?? 1;
   }
@@ -810,15 +805,29 @@
     if (!doneGomi.includes(name)) doneGomi.push(name);
     if (!doneSouji.includes(name)) doneSouji.push(name);
   }
+  /** 貢献回数ぶん ×0.9（同じ名前は繰り返す）。未適用時のみ */
+  function applyRoomContributionDiscounts() {
+    if (hist.room_contrib_applied) return { applied: false, detail: [] };
+    const counts = {};
+    for (const e of ROOM_CONTRIBUTIONS) counts[e.name] = (counts[e.name] || 0) + 1;
+    const detail = [];
+    for (const [name, n] of Object.entries(counts)) {
+      const mul = Math.pow(CONTRIB_MUL, n);
+      wG[name] = (Number(wG[name]) || 1) * mul;
+      wS[name] = (Number(wS[name]) || 1) * mul;
+      detail.push({ name, n, mul, w: Math.max(wG[name], wS[name]) });
+    }
+    hist.room_contrib_applied = true;
+    return { applied: true, detail };
+  }
   /** すでにやった人（ボランティア等）→ 達成済み。自己申告パネルとは別。確認のあとで呼ぶ */
   function applyAlreadyDoneExemptions() {
-    const onWheel = new Set(THIS_WEEK_SLOTS);
+    const onWheel = new Set(activeWeekSlots);
     const applied = [], leftover = [];
-    const seen = new Set();
+    const seenName = new Set();
     for (const e of ALREADY_DONE_EXEMPTIONS) {
-      const k = e.name + "\0" + e.reason;
-      if (seen.has(k)) continue;
-      seen.add(k);
+      if (seenName.has(e.name)) continue;
+      seenName.add(e.name);
       if (onWheel.has(e.name)) {
         markAlreadyDone(e.name);
         applied.push(e);
@@ -858,7 +867,7 @@
     candG = gp; candS = sp;
     if (useWeekSlots()) {
       // 除外チェック用：今週枠のユニーク名（重複枠は帳尻合わせ）
-      candidates = [...new Set(THIS_WEEK_SLOTS)];
+      candidates = [...new Set(activeWeekSlots)];
     } else {
       candidates = [...new Set([...gp, ...sp])].sort((a, b) => members.indexOf(a) - members.indexOf(b));
     }
@@ -867,29 +876,43 @@
   function roleWeights(role) {
     const primary = role === ROLE_GOMI ? wG : wS;
     const secondary = role === ROLE_GOMI ? wS : wG;
-    const secRole = role === ROLE_GOMI ? ROLE_SOUJI : ROLE_GOMI;
     const merged = { ...primary };
-    for (const [m, w] of Object.entries(secondary)) {
-      // 持ち越し／未実施ペナルティは両方の抽選に効かせる
-      if ((w > 1.0 && w < PENALTY_RATE) || (w >= PENALTY_RATE && prevUnfinished.has(key(secRole, m)))) {
-        merged[m] = Math.max(Number(merged[m]) || 1.0, Number(w) || 1);
-      }
+    for (const [m, wRaw] of Object.entries(secondary)) {
+      const w = Number(wRaw);
+      if (!(w > 0) || w === 1) continue;
+      const cur = merged[m] != null ? Number(merged[m]) : 1;
+      // ペナルティ(>1)は大きい方、貢献割引(<1)は小さい方を採用
+      merged[m] = w > 1 ? Math.max(cur, w) : Math.min(cur, w);
     }
     // 今週特別枠のブーストは枠が終わるまでだけ重ねる（保存後は消える）
-    if (useWeekSlots()) {
+    if (useWeekSlots() && !weekSlotsContinue) {
       for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
         merged[m] = Math.max(Number(merged[m]) || 1.0, mul);
       }
+    } else if (useWeekSlots() && weekSlotsContinue) {
+      for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
+        if (merged[m] != null) continue;
+        merged[m] = mul;
+      }
     }
-    // 名簿全員に明示（欠けている人は1）
     members.forEach(m => { if (merged[m] == null) merged[m] = 1; });
     return merged;
+  }
+  /** 総合危険度：ゴミ／掃除の高い方（今週枠ブースト＋未実施＋貢献割引） */
+  function personalWeight(m) {
+    const gw = wG[m] != null ? Number(wG[m]) : 1;
+    const sw = wS[m] != null ? Number(wS[m]) : 1;
+    let w = Math.max(gw, sw);
+    if (useWeekSlots() && !weekSlotsContinue && THIS_WEEK_BOOST[m]) {
+      w = Math.max(w, THIS_WEEK_BOOST[m]);
+    }
+    return w;
   }
   const roleCandidates = role => (role === ROLE_GOMI ? candG : candS);
 
   function activePool() {
     if (useWeekSlots()) {
-      let pool = THIS_WEEK_SLOTS.filter(m => !isOutOfWheel(m));
+      let pool = activeWeekSlots.filter(m => !isOutOfWheel(m));
       if (drawRole === ROLE_SOUJI && sessionG) pool = pool.filter(m => m !== sessionG);
       return pool; // 同名の重複枠をそのまま残す
     }
@@ -908,7 +931,7 @@
 
   function canRunBoth() {
     if (useWeekSlots()) {
-      const names = [...new Set(THIS_WEEK_SLOTS.filter(m => !isOutOfWheel(m)))];
+      const names = [...new Set(activeWeekSlots.filter(m => !isOutOfWheel(m)))];
       if (names.length < 2) return [false, "ゴミと掃除の両方を決める人が足りません。自己申告免除を減らしてください。"];
       return [true, ""];
     }
@@ -953,15 +976,17 @@
       computePools();
       renderAll();
     } else {
-      // 未実施 → 今週ルーレットに残す。幡鎌・芝原は10倍のまま（積まない）
-      const keep = THIS_WEEK_BOOST[last] ?? PENALTY_RATE;
-      wmap[last] = keep;
+      // 未実施 → 残す。現在倍率（ブースト含む）にさらに ×10（例: 10 → 100）
+      const cur = Math.max(Number(wmap[last]) || 1, Number(wG[last]) || 1, Number(wS[last]) || 1, THIS_WEEK_BOOST[last] ?? 1);
+      const next = cur * PENALTY_RATE;
+      wG[last] = Math.max(Number(wG[last]) || 1, next);
+      wS[last] = Math.max(Number(wS[last]) || 1, next);
       prevUnfinished.add(key(role, last));
       alreadyDoneExempt.delete(last);
       playSadBgm();
       await splashFx("fail", pickPhrase("fail"), 2200);
       await modal(
-        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：まだなので<strong>今週ルーレットに残ります</strong>。\n倍率は <b>${keep}倍</b> のままです。\nランキング・ルーレット角度にも反映します。\n\n（クリックでBGM停止）</div>`,
+        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：まだなので<strong>今週ルーレットに残ります</strong>。\n倍率 ${cur} × ${PENALTY_RATE} → <b>${next}倍</b>\nランキング・ルーレット角度にも反映します。\n\n（クリックでBGM停止）</div>`,
         [{ label: "OK", value: true, cls: "dark" }], "fx-fail");
       stopSadBgm();
       computePools();
@@ -1031,7 +1056,7 @@
     const poolSet = new Set(useRole ? activePool() : members);
     const total = rows.reduce((s, r) => s + (poolSet.has(r.m) ? r.w : 0), 0);
     const maxW = Math.max(1, ...rows.map(r => r.w));
-    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n${useWeekSlots() ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1（保存後は消える）\n" : ""}未実施「いいえ」→ 倍率を残して次週も抽選対象\n達成「はい」→ 今週ルーレットから外す</div>`;
+    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n${useWeekSlots() && !weekSlotsContinue ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1\n" : ""}${useWeekSlots() && weekSlotsContinue ? "残り枠の続き（未抽選メンバー）\n" : ""}未実施「いいえ」→ 現倍率×10（例:10→100）で残る\n達成「はい」→ 今週ルーレットから外す\n部屋貢献→ 1回ごと×0.9（同名は繰り返し）</div>`;
     h += `<div class="rank-sec">── ${useRole ? roleName(drawRole) + "抽選の相対" : "総合"}ランキング ──</div>`;
     rows.forEach((r, i) => {
       const inPool = poolSet.has(r.m) && !isOutOfWheel(r.m);
@@ -1060,7 +1085,7 @@
     const box = $("excludeList");
     box.innerHTML = "";
     // 自己申告は今週ルーレット対象者から選ぶ（達成済み扱いは一覧に出さない）
-    const list = (useWeekSlots() ? [...new Set(THIS_WEEK_SLOTS)] : candidates)
+    const list = (useWeekSlots() ? [...new Set(activeWeekSlots)] : candidates)
       .filter(m => !alreadyDoneExempt.has(m));
     list.forEach(m => {
       const l = document.createElement("label");
@@ -1083,7 +1108,7 @@
     $("info").style.whiteSpace = "pre-line";
     const slotN = useWeekSlots() ? activePool().length : null;
     $("status").textContent = useWeekSlots()
-      ? `総メンバー: ${members.length}人 / 今週枠: ${THIS_WEEK_SLOTS.length}（重複込） / 抽選中: ${slotN ?? "-"} / 自己申告免除: ${weeklyExcluded.size} / 達成済み: ${alreadyDoneExempt.size}`
+      ? `総メンバー: ${members.length}人 / ${weekSlotsContinue ? "残り枠" : "今週枠"}: ${activeWeekSlots.length} / 抽選中: ${slotN ?? "-"} / 自己申告免除: ${weeklyExcluded.size} / 達成済み: ${alreadyDoneExempt.size}`
       : `総メンバー: ${members.length}人 / ゴミ残り: ${candG.length} / 掃除残り: ${candS.length}`;
   }
   function renderButtons() {
@@ -1394,9 +1419,15 @@
         try { await navigator.clipboard.writeText(msg); } catch (e) {
           const ta = document.createElement("textarea"); ta.value = msg; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
         }
-        weekSlotsActive = false;
+        const rem = (hist && hist.week_remaining_slots) || [];
+        weekSlotsActive = rem.length > 0;
+        weekSlotsContinue = rem.length > 0;
+        if (rem.length) activeWeekSlots = [...rem];
         finished = true; renderAll(); refreshArchiveStatus();
-        await info("保存＆コピー完了", "roulette-data に反映し、連絡文をコピーしました。\n次回起動から更新後の状態で始まります。");
+        const remMsg = rem.length
+          ? `\n残り枠 ${rem.length}人（${rem.join("・")}）は次回ルーレットに持ち越します。`
+          : "\n今週枠はすべて消化しました。";
+        await info("保存＆コピー完了", "roulette-data に反映し、連絡文をコピーしました。" + remMsg);
       }
     } else {
       await info("未保存", "今回の結果は data に書いていません。\nページを再読み込みすると、開く前の状態に戻ります。");
@@ -1409,17 +1440,34 @@
     d.last_gomi_winner = lastG; d.last_souji_winner = lastS;
     d.weights_gomi = { ...wG }; d.weights_souji = { ...wS };
     d.pair_pending_souji = false; d.pair_session_excluded = [];
-    d.week_slots_finished = true;
+    d.room_contrib_applied = !!hist.room_contrib_applied;
     alreadyDoneExempt.forEach(m => {
       if (!d.done_gomi.includes(m)) d.done_gomi.push(m);
       if (!d.done_souji.includes(m)) d.done_souji.push(m);
     });
+    // 今週枠の未抽選メンバーは次週へ持ち越し（通常プールに落とすと「片方完了」で消える）
+    if (useWeekSlots()) {
+      const winners = new Set([lastG, lastS].filter(Boolean));
+      const rem = [];
+      const seen = new Set();
+      for (const m of activeWeekSlots) {
+        if (seen.has(m) || winners.has(m) || alreadyDoneExempt.has(m)) continue;
+        seen.add(m);
+        rem.push(m);
+      }
+      d.week_remaining_slots = rem;
+      d.week_slots_finished = rem.length === 0;
+    } else {
+      d.week_slots_finished = true;
+      d.week_remaining_slots = [];
+    }
     const p = n => String(n).padStart(2, "0"), now = new Date();
     d.session_close_snapshot = {
       saved_at: `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`,
       done_gomi: [...d.done_gomi], done_souji: [...d.done_souji],
       this_week_gomi_winner: lastG, this_week_souji_winner: lastS,
       weights_gomi: { ...wG }, weights_souji: { ...wS },
+      week_remaining_slots: [...(d.week_remaining_slots || [])],
     };
     return d;
   }
@@ -1531,19 +1579,20 @@
     doneGomi = [...(hist.done_gomi || [])]; doneSouji = [...(hist.done_souji || [])];
     lastG = hist.last_gomi_winner ?? null;
     lastS = hist.last_souji_winner ?? null;
-    // 今週枠オーバーライドは、コピー保存が終わっていなければ有効
-    weekSlotsActive = !hist.week_slots_finished;
-    // 既存の未実施ペナルティ等は消さない（ブーストは表示時のみ重ねる）
     wG = { ...(hist.weights_gomi || {}) };
     wS = { ...(hist.weights_souji || {}) };
-    if (weekSlotsActive) {
-      // 前回当番はゴミ=幡鎌 / 掃除=芝原
+    const remSlots = Array.isArray(hist.week_remaining_slots) ? hist.week_remaining_slots.filter(Boolean) : [];
+    weekSlotsContinue = remSlots.length > 0;
+    weekSlotsActive = weekSlotsContinue || !hist.week_slots_finished;
+    activeWeekSlots = weekSlotsContinue ? [...remSlots] : [...THIS_WEEK_SLOTS];
+    if (weekSlotsActive && !weekSlotsContinue) {
+      // 初回のみ：前回当番はゴミ=幡鎌 / 掃除=芝原
       lastG = "幡鎌";
       lastS = "芝原";
-      // 確認のため前回当番は done から一旦外す（達成確認後に再判定）
       doneGomi = doneGomi.filter(m => m !== lastG);
       doneSouji = doneSouji.filter(m => m !== lastS);
     }
+    const contrib = applyRoomContributionDiscounts();
     renderWeekly();
     computePools(); renderAll();
     refreshArchiveStatus();
@@ -1551,21 +1600,28 @@
     await checkPrevious(ROLE_GOMI);
     await checkPrevious(ROLE_SOUJI);
     await checkCycleReset();
-    // ボランティア等：すでに実施済み → 達成済み扱い（自己申告とは別）／今週枠中のみ
-    if (weekSlotsActive) {
+    // ボランティア等：達成済み扱い（続き枠では既に外れている想定）
+    if (weekSlotsActive && !weekSlotsContinue) {
       const ex = applyAlreadyDoneExemptions();
       computePools();
-      if (ex.applied.length || ex.leftover.length) {
-        let body = "";
-        if (ex.applied.length) {
-          body += "【実施済み → 今週は達成済み扱い】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
-        }
-        if (ex.leftover.length) {
-          body += "【次週へ持ち越し（今週枠にいなかった実施済み）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
-        }
-        body += "※右パネルの「自己申告：今週ルーレット免除」は別物です。\n毎週ヒアリングで、対象者からその週だけ外す用です。";
-        await info("実施済みの反映", body);
+      let body = "";
+      if (contrib.applied && contrib.detail.length) {
+        body += "【部屋貢献 → 倍率×0.9（回数ぶん）】\n" +
+          contrib.detail.map(d => `・${d.name} ×${d.n}回 → ×${d.mul.toFixed(3)}（いま ${d.w % 1 ? d.w.toFixed(3) : d.w}倍）`).join("\n") + "\n\n";
       }
+      if (ex.applied.length) {
+        body += "【実施済み → 今週は達成済み扱い】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+      }
+      if (ex.leftover.length) {
+        body += "【枠外の貢献者（免除対象外・倍率のみ反映）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+      }
+      if (body) {
+        body += "※右パネルの「自己申告：今週ルーレット免除」は別物です。";
+        await info("実施済み・貢献の反映", body);
+      }
+    } else if (contrib.applied && contrib.detail.length) {
+      await info("部屋貢献の反映",
+        contrib.detail.map(d => `・${d.name} ×${d.n}回 → ×${d.mul.toFixed(3)}`).join("\n"));
     }
     busy = false; renderAll();
   }
