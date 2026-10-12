@@ -435,18 +435,18 @@
   </section>
 
   <aside class="panel">
-    <h2>今週の免除（達成済み扱い）</h2>
-    <div class="small" style="text-align:center">チェックした人は今週達成済み扱い（次周まで免除）</div>
+    <h2>自己申告：今週ルーレット免除</h2>
+    <div class="small" style="text-align:center">毎週ヒアリング。ルーレット対象のうち、その週だけ参加できない人</div>
     <div id="excludeList" style="margin-top:10px"></div>
     <div class="row">
       <button id="confirmBtn">免除を確定する（この内容で抽選）</button>
     </div>
     <div class="row">
       <button id="cancelBtn" class="dark" disabled>確定を取り消す（選び直し）</button>
-      <button id="clearBtn" class="dark">免除チェックを解除</button>
+      <button id="clearBtn" class="dark">自己申告をすべて解除</button>
     </div>
     <div class="row"><button id="pullBtn" class="dark">データを更新（git pull）</button></div>
-    <h2 class="rank-title">全体危険度ランキング</h2>
+    <h2 class="rank-title">総合危険度ランキング</h2>
     <div id="ranking"></div>
   </aside>
 </main>
@@ -466,7 +466,8 @@
   // 残メンバー + 帳尻合わせ追加（幡鎌・中田は重複枠）
   const THIS_WEEK_SLOTS = ["幡鎌", "若旅", "中田", "田中", "芝原", "陳", "白井", "幡鎌", "中田", "伊賀", "上出"];
   const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10, "上出": 3 };
-  const THIS_WEEK_EXEMPTIONS = [
+  // すでに実施済み（ボランティア等）→ この周は達成済み扱い（右パネルの自己申告とは別）
+  const ALREADY_DONE_EXEMPTIONS = [
     { name: "田中", reason: "ゴミ捨てボランティア" },
     { name: "中田", reason: "掃除ボランティア" },
     { name: "海老澤", reason: "プリンタ破棄" },
@@ -506,6 +507,8 @@
     win: new Audio("/sounds/win.mp3"),
   };
   Object.values(SFX).forEach(a => { a.preload = "auto"; a.volume = 0.7; });
+  const sadBgm = new Audio("/sounds/sad.mp3");
+  sadBgm.preload = "auto"; sadBgm.loop = true; sadBgm.volume = 0.55;
   function playSfx(name, vol) {
     const base = SFX[name];
     if (!base) return;
@@ -516,6 +519,14 @@
       a.play().catch(() => {});
     } catch (e) { /* autoplay block */ }
   }
+  function playSadBgm() {
+    try { sadBgm.currentTime = 0; sadBgm.play().catch(() => {}); } catch (e) { /* ignore */ }
+  }
+  function stopSadBgm() {
+    try { sadBgm.pause(); sadBgm.currentTime = 0; } catch (e) { /* ignore */ }
+  }
+  // クリックで悲しいBGM停止
+  document.addEventListener("pointerdown", () => { if (!sadBgm.paused) stopSadBgm(); }, true);
 
   // ---------- 演出 ----------
   let fxTimer = null;
@@ -578,8 +589,8 @@
   let doneGomi = [], doneSouji = [], lastG = null, lastS = null, wG = {}, wS = {};
   let prevUnfinished = new Set();
   let candG = [], candS = [], candidates = [];
-  let weeklyExcluded = new Set();
-  let weekExemptDone = new Set(); // 今週免除＝達成済み扱い
+  let weeklyExcluded = new Set(); // 自己申告：今週だけルーレット不参加
+  let alreadyDoneExempt = new Set(); // ボランティア等：この周は達成済み扱い
   let confirmed = false, drawRole = ROLE_GOMI, sessionG = null;
   let angle = 0, speed = 0, spinning = false, stopping = false;
   let busy = true, finished = false, weekly = null;
@@ -615,30 +626,36 @@
 
   function applyThisWeekBoost() {
     for (const [name, mul] of Object.entries(THIS_WEEK_BOOST)) {
-      wG[name] = Math.max(wG[name] ?? 1, mul);
-      wS[name] = Math.max(wS[name] ?? 1, mul);
+      wG[name] = Math.max(Number(wG[name]) || 1, mul);
+      wS[name] = Math.max(Number(wS[name]) || 1, mul);
     }
   }
-  function markExemptDone(name) {
-    weekExemptDone.add(name);
-    weeklyExcluded.add(name); // ルーレット枠からも外す
+  function personalWeight(m) {
+    return THIS_WEEK_BOOST[m] ?? 1;
+  }
+  function markAlreadyDone(name) {
+    alreadyDoneExempt.add(name);
     if (!doneGomi.includes(name)) doneGomi.push(name);
     if (!doneSouji.includes(name)) doneSouji.push(name);
   }
-  function applyThisWeekExemptions() {
+  /** すでにやった人（ボランティア等）→ 達成済み。自己申告パネルとは別。確認のあとで呼ぶ */
+  function applyAlreadyDoneExemptions() {
     const onWheel = new Set(THIS_WEEK_SLOTS);
     const applied = [], leftover = [];
     const seen = new Set();
-    for (const e of THIS_WEEK_EXEMPTIONS) {
+    for (const e of ALREADY_DONE_EXEMPTIONS) {
       const k = e.name + "\0" + e.reason;
       if (seen.has(k)) continue;
       seen.add(k);
       if (onWheel.has(e.name)) {
-        markExemptDone(e.name);
+        markAlreadyDone(e.name);
         applied.push(e);
       } else leftover.push(e);
     }
     return { applied, leftover };
+  }
+  function isOutOfWheel(m) {
+    return weeklyExcluded.has(m) || alreadyDoneExempt.has(m);
   }
 
   // ---------- roulette.py の移植 ----------
@@ -694,11 +711,11 @@
 
   function activePool() {
     if (useWeekSlots()) {
-      let pool = THIS_WEEK_SLOTS.filter(m => !weeklyExcluded.has(m));
+      let pool = THIS_WEEK_SLOTS.filter(m => !isOutOfWheel(m));
       if (drawRole === ROLE_SOUJI && sessionG) pool = pool.filter(m => m !== sessionG);
       return pool; // 同名の重複枠をそのまま残す
     }
-    let pool = roleCandidates(drawRole).filter(m => !weeklyExcluded.has(m));
+    let pool = roleCandidates(drawRole).filter(m => !isOutOfWheel(m));
     if (drawRole === ROLE_SOUJI && sessionG) pool = pool.filter(m => m !== sessionG);
     return pool;
   }
@@ -713,16 +730,16 @@
 
   function canRunBoth() {
     if (useWeekSlots()) {
-      const names = [...new Set(THIS_WEEK_SLOTS.filter(m => !weeklyExcluded.has(m)))];
-      if (names.length < 2) return [false, "ゴミと掃除の両方を決める人が足りません。除外を減らしてください。"];
+      const names = [...new Set(THIS_WEEK_SLOTS.filter(m => !isOutOfWheel(m)))];
+      if (names.length < 2) return [false, "ゴミと掃除の両方を決める人が足りません。自己申告免除を減らしてください。"];
       return [true, ""];
     }
-    const ga = candG.filter(m => !weeklyExcluded.has(m));
-    const sa = candS.filter(m => !weeklyExcluded.has(m));
-    if (!ga.length || !sa.length) return [false, "ゴミまたは掃除の候補がいません。除外を減らしてください。"];
+    const ga = candG.filter(m => !isOutOfWheel(m));
+    const sa = candS.filter(m => !isOutOfWheel(m));
+    if (!ga.length || !sa.length) return [false, "ゴミまたは掃除の候補がいません。自己申告免除を減らしてください。"];
     for (const g of ga) {
       if (!sa.filter(m => m !== g).length) {
-        return [false, "どの組み合わせでも掃除当番が決められません。\n（掃除候補がゴミ当選者しかいない状態になり得ます）\n除外または名簿を見直してください。"];
+        return [false, "どの組み合わせでも掃除当番が決められません。\n（掃除候補がゴミ当選者しかいない状態になり得ます）\n免除または名簿を見直してください。"];
       }
     }
     return [true, ""];
@@ -756,10 +773,12 @@
     } else {
       wmap[last] = Math.max(wmap[last] ?? 1.0, PENALTY_RATE);
       prevUnfinished.add(key(role, last));
+      playSadBgm();
       await splashFx("fail", pickPhrase("fail"), 2200);
       await modal(
-        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：今週の当選倍率を${PENALTY_RATE}倍にします。\n次の周に入るときは、持ち越し分として+100%に変換します。</div>`,
+        `<div class="big">任務未完了</div><div class="big" style="font-size:clamp(28px,7vw,52px);margin-top:8px">終了</div><div class="body" style="margin-top:14px;color:#999">${esc(last)}さんの${esc(duty)}当番：今週の当選倍率を${PENALTY_RATE}倍にします。\n次の周に入るときは、持ち越し分として+100%に変換します。\n\n（クリックでBGM停止）</div>`,
         [{ label: "OK", value: true, cls: "dark" }], "fx-fail");
+      stopSadBgm();
     }
   }
 
@@ -802,80 +821,61 @@
       const wm = roleWeights(role);
       const target = role === ROLE_GOMI ? wG : wS;
       const total = base.reduce((s, m) => s + (wm[m] ?? 1), 0);
+      // 自己申告免除のみ翌週向けボーナス（達成済み扱いの人は対象外）
       weeklyExcluded.forEach(m => {
-        if (weekExemptDone.has(m)) return; // 達成済み免除は倍率ボーナスなし
+        if (alreadyDoneExempt.has(m)) return;
         const w = wm[m] ?? 1;
         if (total > 0) target[m] = (target[m] ?? 1) * (1 + w / total);
       });
     }
   }
 
-  // ---------- 右パネル ----------
-  function rankingBlock(role, exclude) {
-    const wm = roleWeights(role);
-    const pool = new Set(useWeekSlots()
-      ? THIS_WEEK_SLOTS.filter(m => !weeklyExcluded.has(m) && !(role === ROLE_SOUJI && sessionG === m))
-      : roleCandidates(role));
-    const sorted = [...members].sort((a, b) => (wm[b] ?? 1) - (wm[a] ?? 1));
-    const maxW = Math.max(1, ...sorted.map(m => wm[m] ?? 1));
-    const total = [...pool].reduce((s, m) => s + (wm[m] ?? 1), 0);
-    let out = "";
-    sorted.forEach((m, i) => {
-      const w = wm[m] ?? 1;
-      const prob = pool.has(m) && total > 0 ? (w / total) * 100 : 0;
-      const bar = Math.max(4, Math.round((w / maxW) * 100));
-      let st;
-      if (weekExemptDone.has(m)) st = "今週達成済み（免除）";
-      else if (weeklyExcluded.has(m)) st = "今週免除";
-      else if (exclude.has(m)) st = "今回のゴミ当番";
-      else if (!pool.has(m)) st = (role === ROLE_GOMI ? "掃除" : "ゴミ") + "対象外";
-      else if (doneGomi.includes(m) || doneSouji.includes(m)) st = "今周完了済み";
-      else st = "抽選対象";
-      const dim = !pool.has(m) || weeklyExcluded.has(m) || weekExemptDone.has(m);
-      out += `<div class="rank-row">`;
-      out += `<div class="rank-no">${i === 0 ? "👑" : (i + 1)}</div>`;
-      out += `<div class="rank-name">${esc(m)}</div>`;
-      out += `<div class="rank-bar-wrap"><div class="rank-bar${dim ? " dim" : ""}" style="width:${bar}%"></div></div>`;
-      out += `<div class="rank-meta">${w.toFixed(1)}倍${pool.has(m) ? ` / ${prob.toFixed(0)}%` : ""}</div>`;
-      out += `</div><div class="rank-st">${esc(st)}</div>`;
-    });
-    return out;
-  }
+  // ---------- 右パネル：総合危険度（ゴミ+掃除を分けない個人評価） ----------
   function renderRanking() {
-    let h = "";
-    if (!confirmed) {
-      h += `<div class="rank-note">〔確定前：全員分〕1回目＝ゴミ／2回目＝掃除</div>`;
-      h += `<div class="rank-sec">── ゴミ捨て当番 ──</div>` + rankingBlock(ROLE_GOMI, new Set());
-      h += `<div class="rank-sec">── 掃除当番 ──</div>` + rankingBlock(ROLE_SOUJI, sessionG ? new Set([sessionG]) : new Set());
-    } else {
-      const ex = drawRole === ROLE_SOUJI && sessionG ? new Set([sessionG]) : new Set();
-      h += `<div class="rank-sec">〔${roleName(drawRole)}当番・危険度〕</div>` + rankingBlock(drawRole, ex);
-    }
+    const rows = members.map((m, idx) => ({ m, w: personalWeight(m), idx }));
+    rows.sort((a, b) => (b.w - a.w) || (a.idx - b.idx));
+    const total = rows.reduce((s, r) => s + r.w, 0);
+    const maxW = Math.max(1, ...rows.map(r => r.w));
+    let h = `<div class="rank-note">個人の総合危険度（ゴミ・掃除共通）\n倍率：幡鎌・芝原=10 / 上出=3 / 他=1</div>`;
+    h += `<div class="rank-sec">── 総合ランキング ──</div>`;
+    rows.forEach((r, i) => {
+      const prob = total > 0 ? (r.w / total) * 100 : 0;
+      const bar = Math.round((r.w / maxW) * 100);
+      let st = "抽選対象";
+      if (alreadyDoneExempt.has(r.m)) st = "達成済み（実施済み免除）";
+      else if (weeklyExcluded.has(r.m)) st = "自己申告：今週免除";
+      else if (sessionG === r.m) st = "今回のゴミ当番";
+      else if (doneGomi.includes(r.m) && doneSouji.includes(r.m)) st = "今周完了済み";
+      else if (doneGomi.includes(r.m) || doneSouji.includes(r.m)) st = "片方完了";
+      const dim = isOutOfWheel(r.m) || (doneGomi.includes(r.m) && doneSouji.includes(r.m));
+      h += `<div class="rank-row">`;
+      h += `<div class="rank-no">${i === 0 ? "👑" : (i + 1)}</div>`;
+      h += `<div class="rank-name">${esc(r.m)}</div>`;
+      h += `<div class="rank-bar-wrap"><div class="rank-bar${dim ? " dim" : ""}" style="width:${bar}%"></div></div>`;
+      h += `<div class="rank-meta">${r.w.toFixed(0)}倍 / ${prob.toFixed(1)}%</div>`;
+      h += `</div><div class="rank-st">${esc(st)}</div>`;
+    });
     $("ranking").innerHTML = h;
   }
   function renderExclude() {
     const box = $("excludeList");
     box.innerHTML = "";
-    candidates.forEach(m => {
+    // 自己申告は今週ルーレット対象者から選ぶ（達成済み扱いは一覧に出さない）
+    const list = (useWeekSlots() ? [...new Set(THIS_WEEK_SLOTS)] : candidates)
+      .filter(m => !alreadyDoneExempt.has(m));
+    list.forEach(m => {
       const l = document.createElement("label");
       const c = document.createElement("input");
-      c.type = "checkbox"; c.checked = weeklyExcluded.has(m) || weekExemptDone.has(m); c.disabled = confirmed || busy;
+      c.type = "checkbox"; c.checked = weeklyExcluded.has(m); c.disabled = confirmed || busy;
       c.onchange = () => {
-        if (c.checked) markExemptDone(m);
-        else {
-          weeklyExcluded.delete(m);
-          if (weekExemptDone.has(m)) {
-            weekExemptDone.delete(m);
-            doneGomi = doneGomi.filter(x => x !== m);
-            doneSouji = doneSouji.filter(x => x !== m);
-          }
-        }
-        computePools(); renderAll();
+        if (c.checked) weeklyExcluded.add(m);
+        else weeklyExcluded.delete(m);
+        renderAll();
       };
-      l.append(c, document.createTextNode(m + (weekExemptDone.has(m) ? "（達成済み）" : "")));
+      l.append(c, document.createTextNode(m));
       box.appendChild(l);
     });
-    if (!candidates.length) box.textContent = "候補がいません。";
+    if (!list.length) box.textContent = "自己申告の対象がいません。";
   }
   function renderInfo() {
     $("info").textContent = confirmed
@@ -884,7 +884,7 @@
     $("info").style.whiteSpace = "pre-line";
     const slotN = useWeekSlots() ? activePool().length : null;
     $("status").textContent = useWeekSlots()
-      ? `総メンバー: ${members.length}人 / 今週枠: ${THIS_WEEK_SLOTS.length}（重複込） / 抽選中の枠: ${slotN ?? "-"} / 達成済み免除: ${weekExemptDone.size}`
+      ? `総メンバー: ${members.length}人 / 今週枠: ${THIS_WEEK_SLOTS.length}（重複込） / 抽選中: ${slotN ?? "-"} / 自己申告免除: ${weeklyExcluded.size} / 達成済み: ${alreadyDoneExempt.size}`
       : `総メンバー: ${members.length}人 / ゴミ残り: ${candG.length} / 掃除残り: ${candS.length}`;
   }
   function renderButtons() {
@@ -1185,11 +1185,7 @@
   }
   function cancelConfirm() { confirmed = false; drawRole = ROLE_GOMI; sessionG = null; renderAll(); }
   function clearExclusions() {
-    // 達成済み免除の done 印は残し、手動チェック分だけ外す
-    const keep = new Set(weekExemptDone);
-    weeklyExcluded.clear();
-    keep.forEach(n => weeklyExcluded.add(n));
-    applyThisWeekExemptions();
+    weeklyExcluded.clear(); // 自己申告のみ解除（達成済み扱いは残す）
     cancelConfirm();
   }
 
@@ -1229,31 +1225,36 @@
     // 掃除まで終わらず終了していたデータは無効化（メモリのみ）
     if (hist.pair_pending_souji) { hist.pair_pending_souji = false; hist.pair_session_excluded = []; hist.last_gomi_winner = null; }
     doneGomi = [...(hist.done_gomi || [])]; doneSouji = [...(hist.done_souji || [])];
-    lastG = hist.last_gomi_winner ?? null; lastS = hist.last_souji_winner ?? null;
-    wG = { ...(hist.weights_gomi || {}) }; wS = { ...(hist.weights_souji || {}) };
+    // 前回当番：ゴミ=幡鎌 / 掃除=芝原（確認のため明示）
+    lastG = "幡鎌";
+    lastS = "芝原";
+    // 達成済み確認のため、前回当番は done から外す
+    doneGomi = doneGomi.filter(m => m !== lastG);
+    doneSouji = doneSouji.filter(m => m !== lastS);
+    // 総合倍率はブーストのみ（他は1倍）。履歴の余分な倍率は持ち込まない
+    wG = {}; wS = {};
     applyThisWeekBoost();
-    const ex = applyThisWeekExemptions();
     renderWeekly();
     computePools(); renderAll();
-    if (ex.applied.length || ex.leftover.length) {
-      let body = "";
-      if (ex.applied.length) {
-        body += "【今週は達成済み扱い（免除）】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
-      }
-      if (ex.leftover.length) {
-        body += "【次週へ持ち越し（今週枠にいなかった免除）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n");
-      } else {
-        body += "次週へ持ち越す免除はありません。";
-      }
-      await info("免除の反映", body);
-    }
+    // 先に前回のゴミ・掃除の実施確認（達成済み処理より前）
     await checkPrevious(ROLE_GOMI);
     await checkPrevious(ROLE_SOUJI);
     await checkCycleReset();
     applyThisWeekBoost();
+    // ボランティア等：すでに実施済み → 達成済み扱い（自己申告とは別）
+    const ex = applyAlreadyDoneExemptions();
     computePools();
-    // 免除は一周リセット後も維持
-    applyThisWeekExemptions();
+    if (ex.applied.length || ex.leftover.length) {
+      let body = "";
+      if (ex.applied.length) {
+        body += "【実施済み → 今週は達成済み扱い】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+      }
+      if (ex.leftover.length) {
+        body += "【次週へ持ち越し（今週枠にいなかった実施済み）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+      }
+      body += "※右パネルの「自己申告：今週ルーレット免除」は別物です。\n毎週ヒアリングで、対象者からその週だけ外す用です。";
+      await info("実施済みの反映", body);
+    }
     busy = false; renderAll();
   }
   init();
