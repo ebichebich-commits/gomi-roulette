@@ -518,7 +518,7 @@
     { name: "田中", reason: "ゴミ捨てボランティア" },
   ];
   const TICK_DEG = 20;
-  const TICK_COOLDOWN_MS = 300;
+  const TICK_COOLDOWN_MS = 100;
   const FX_PHRASES = {
     win: [
       "運命の選択！！", "あなたは選ばれし者！！", "伝説が始まる！！",
@@ -1444,12 +1444,14 @@
     wG = { ...(hist.weights_gomi || {}) };
     wS = { ...(hist.weights_souji || {}) };
     if (weekSlotsActive) {
-      // 今週特別枠中はブーストを明示適用（他は1扱い）
+      // 前回当番はゴミ=幡鎌 / 掃除=芝原
+      lastG = "幡鎌";
+      lastS = "芝原";
       wG = {}; wS = {};
       applyThisWeekBoost();
-      // 確認のため前回当番は done から一旦外す
-      if (lastG) doneGomi = doneGomi.filter(m => m !== lastG);
-      if (lastS) doneSouji = doneSouji.filter(m => m !== lastS);
+      // 確認のため前回当番は done から一旦外す（達成確認後に再判定）
+      doneGomi = doneGomi.filter(m => m !== lastG);
+      doneSouji = doneSouji.filter(m => m !== lastS);
     } else {
       applyThisWeekBoost();
     }
