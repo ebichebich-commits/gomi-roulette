@@ -30,6 +30,9 @@ SOUND_EXTS = (".mp3", ".wav", ".ogg", ".m4a")
 
 CSV_FILE = "members.csv"
 DATA_FILE = "duty_history.json"
+ARCHIVE_DIR = "history_archive"
+ARCHIVE_META = "history_archive_meta.json"
+ARCHIVE_KEEP_DAYS = 180
 QUIZ_FILE_NAME = "quiz.txt"
 QUIZ_ANSWER_IMAGE_NAMES = ("quiz-answer.png", "quiz-answer.jpg", "quiz-answer.jpeg", "quiz-answer.gif")
 SUPPORTED_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
@@ -193,17 +196,144 @@ class App:
         img = next((self.url(t / n) for n in QUIZ_ANSWER_IMAGE_NAMES if (t / n).is_file()), None)
         return {"ok": True, "answer": a, "image": img}
 
+    def _archive_root(self) -> Path:
+        return self.data_dir / ARCHIVE_DIR
+
+    def _meta_path(self) -> Path:
+        return self.data_dir / ARCHIVE_META
+
+    def _read_meta(self) -> dict:
+        p = self._meta_path()
+        try:
+            d = json.loads(p.read_text(encoding="utf-8-sig"))
+            if isinstance(d, dict) and isinstance(d.get("files"), list):
+                return d
+        except (OSError, ValueError):
+            pass
+        return {"files": [], "current": None}
+
+    def _write_meta(self, meta: dict) -> None:
+        self._meta_path().write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _prune_archives(self, meta: dict) -> dict:
+        root = self._archive_root()
+        keep_after = datetime.now().timestamp() - ARCHIVE_KEEP_DAYS * 86400
+        kept = []
+        for name in meta.get("files") or []:
+            fp = root / name
+            if not fp.is_file():
+                continue
+            try:
+                if fp.stat().st_mtime >= keep_after:
+                    kept.append(name)
+                else:
+                    fp.unlink(missing_ok=True)
+            except OSError:
+                kept.append(name)
+        meta["files"] = kept
+        if meta.get("current") not in kept:
+            meta["current"] = kept[-1] if kept else None
+        return meta
+
+    def _save_archive_snapshot(self, history: dict, label: str = "") -> str:
+        root = self._archive_root()
+        root.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        name = f"{stamp}.json"
+        payload = {
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "label": label or stamp,
+            "history": history,
+        }
+        (root / name).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return name
+
+    def _write_history_file(self, history: dict) -> None:
+        tmp = self.data_dir / (DATA_FILE + ".tmp")
+        tmp.write_text(json.dumps(history, ensure_ascii=False, indent=4), encoding="utf-8")
+        os.replace(tmp, self.data_dir / DATA_FILE)
+
+    def list_archives(self) -> dict:
+        meta = self._prune_archives(self._read_meta())
+        root = self._archive_root()
+        items = []
+        for name in meta.get("files") or []:
+            fp = root / name
+            if not fp.is_file():
+                continue
+            try:
+                raw = json.loads(fp.read_text(encoding="utf-8-sig"))
+                h = raw.get("history") if isinstance(raw, dict) else {}
+                items.append({
+                    "id": name,
+                    "saved_at": raw.get("saved_at") if isinstance(raw, dict) else name,
+                    "label": raw.get("label") if isinstance(raw, dict) else name,
+                    "gomi": (h or {}).get("last_gomi_winner"),
+                    "souji": (h or {}).get("last_souji_winner"),
+                    "current": name == meta.get("current"),
+                })
+            except (OSError, ValueError):
+                continue
+        return {"ok": True, "archives": items, "current": meta.get("current")}
+
+    def restore_archive(self, archive_id: str | None, direction: str | None = None) -> dict:
+        with _write_lock:
+            meta = self._prune_archives(self._read_meta())
+            files = meta.get("files") or []
+            if not files:
+                return {"ok": False, "error": "保存された週履歴がありません"}
+            cur = meta.get("current")
+            try:
+                idx = files.index(cur) if cur in files else len(files) - 1
+            except ValueError:
+                idx = len(files) - 1
+            if direction == "prev":
+                idx = max(0, idx - 1)
+            elif direction == "next":
+                idx = min(len(files) - 1, idx + 1)
+            elif archive_id:
+                if archive_id not in files:
+                    return {"ok": False, "error": "指定の履歴がありません"}
+                idx = files.index(archive_id)
+            else:
+                return {"ok": False, "error": "direction または id が必要です"}
+            name = files[idx]
+            fp = self._archive_root() / name
+            raw = json.loads(fp.read_text(encoding="utf-8-sig"))
+            history = raw.get("history") if isinstance(raw, dict) else None
+            if not isinstance(history, dict):
+                return {"ok": False, "error": "履歴ファイルが壊れています"}
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            self._write_history_file(history)
+            meta["current"] = name
+            self._write_meta(meta)
+            msg = contact_message(history.get("last_gomi_winner"), history.get("last_souji_winner"))
+            (self.data_dir / "latest_teams_message.txt").write_text(msg, encoding="utf-8")
+            return {"ok": True, "current": name, "history": history, "message": msg}
+
     def session_end(self, history: dict) -> dict:
         history["pair_pending_souji"] = False
         history["pair_session_excluded"] = []
+        history["week_slots_finished"] = True
         msg = contact_message(history.get("last_gomi_winner"), history.get("last_souji_winner"))
         with _write_lock:
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            tmp = self.data_dir / (DATA_FILE + ".tmp")
-            tmp.write_text(json.dumps(history, ensure_ascii=False, indent=4), encoding="utf-8")
-            os.replace(tmp, self.data_dir / DATA_FILE)
+            # 上書き前の状態をアーカイブ（戻せるように）
+            old = read_history(self.data_dir / DATA_FILE)
+            meta = self._prune_archives(self._read_meta())
+            if old:
+                old_name = self._save_archive_snapshot(old, label="before-save")
+                if old_name not in meta["files"]:
+                    meta["files"].append(old_name)
+            self._write_history_file(history)
+            new_name = self._save_archive_snapshot(history, label="after-save")
+            if new_name not in meta["files"]:
+                meta["files"].append(new_name)
+            meta["current"] = new_name
+            meta = self._prune_archives(meta)
+            self._write_meta(meta)
             (self.data_dir / "latest_teams_message.txt").write_text(msg, encoding="utf-8")
-        return {"ok": True, "message": msg}
+        return {"ok": True, "message": msg, "archived": True}
 
     def pull(self) -> dict:
         if not (self.data_dir / ".git").is_dir():
@@ -251,6 +381,8 @@ def make_handler(app: App):
                 return self._send(200, full.read_bytes(), ctype)
             if path == "/api/data":
                 return self._json(app.data())
+            if path == "/api/archives":
+                return self._json(app.list_archives())
             if path == "/api/quiz-answer":
                 return self._json(app.quiz_answer())
             if path.startswith("/api/file/"):
@@ -281,6 +413,11 @@ def make_handler(app: App):
                 try:
                     return self._json(app.session_end(h))
                 except OSError as e:
+                    return self._json({"ok": False, "error": str(e)}, 500)
+            if path == "/api/archives/restore":
+                try:
+                    return self._json(app.restore_archive(body.get("id"), body.get("direction")))
+                except (OSError, ValueError) as e:
                     return self._json({"ok": False, "error": str(e)}, 500)
             if path == "/api/pull":
                 return self._json(app.pull())

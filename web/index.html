@@ -54,11 +54,11 @@
     color: #4a0010; box-shadow: 0 0 14px rgba(255, 210, 0, .7);
   }
   h1 {
-    margin: 0; font-size: clamp(28px, 3.6vw, 48px); font-weight: 900; font-style: italic;
-    letter-spacing: .04em;
-    background: linear-gradient(180deg, #fffbd0 0%, #ffd83a 45%, #c98a00 52%, #ffe36a 100%);
+    margin: 0; font-size: clamp(34px, 4.8vw, 64px); font-weight: 900; font-style: italic;
+    letter-spacing: .06em; line-height: 1.15;
+    background: linear-gradient(180deg, #fffef0 0%, #ffe27a 30%, #ffd000 48%, #c98a00 55%, #fff3a8 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 2px 0 #5a0010) drop-shadow(0 0 12px rgba(255, 70, 70, .75));
+    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 18px rgba(255, 200, 0, .95)) drop-shadow(0 0 28px rgba(255, 70, 70, .55));
   }
 
   main {
@@ -219,8 +219,9 @@
     box-shadow: 0 0 10px rgba(255,80,40,.55);
   }
   #ranking .rank-bar.dim {
-    background: linear-gradient(90deg, #666, #999);
-    box-shadow: none; opacity: .55;
+    /* 非対象も黄色のまま。少し薄くするだけ */
+    background: linear-gradient(90deg, #ff4b4b, #ffd000 55%, #fff3a8);
+    box-shadow: none; opacity: .42;
   }
   #ranking .rank-meta { font-size: 12px; color: #ffe9a0; white-space: nowrap; min-width: 7.5em; text-align: right; }
   #ranking .rank-st { grid-column: 2 / -1; font-size: 11px; opacity: .75; margin: -4px 0 4px; }
@@ -438,7 +439,7 @@
   }
   @media (max-height: 820px) and (min-width: 1101px) {
     .wheel-wrap { width: min(100%, calc(100vh - 168px), 64vw); }
-    h1 { font-size: clamp(24px, 3vw, 40px); }
+    h1 { font-size: clamp(28px, 3.6vw, 48px); }
     #winner { font-size: clamp(13px, 1.4vw, 18px); }
     .attack { font-size: clamp(14px, 1.7vw, 20px); padding: 6px; }
     #fx .fx-splash { font-size: clamp(40px, 9vw, 90px); }
@@ -448,7 +449,7 @@
 <body>
 <header>
   <span class="tag">FINAL CHANCE</span>
-  <h1>ゴミ捨て・掃除当番 ルーレット</h1>
+  <h1>ゴミ捨て・掃除黄金戦士 ルーレット</h1>
 </header>
 
 <main>
@@ -479,6 +480,13 @@
       <button id="clearBtn" class="dark">自己申告をすべて解除</button>
     </div>
     <div class="row"><button id="pullBtn" class="dark">データを更新（git pull）</button></div>
+    <h2 class="rank-title">週履歴（やり直し）</h2>
+    <div class="small" style="text-align:center">コピー保存後の状態を数か月分保持。途中の再読み込みは保存前に戻ります</div>
+    <div class="row">
+      <button id="archPrevBtn" class="dark">← 前の週に戻す</button>
+      <button id="archNextBtn" class="dark">次の週へ →</button>
+    </div>
+    <div id="archStatus" class="small" style="text-align:center;margin-top:4px"></div>
     <h2 class="rank-title">総合危険度ランキング</h2>
     <div id="ranking"></div>
   </aside>
@@ -509,7 +517,8 @@
     { name: "椎名", reason: "プリンタ破棄" },
     { name: "田中", reason: "ゴミ捨てボランティア" },
   ];
-  const TICK_DEG = 40;
+  const TICK_DEG = 20;
+  const TICK_COOLDOWN_MS = 300;
   const FX_PHRASES = {
     win: [
       "運命の選択！！", "あなたは選ばれし者！！", "伝説が始まる！！",
@@ -532,31 +541,45 @@
       "ウィンナー・ウィナー・チキンディナー！！", "おめでとう、運命の子よ！！",
     ],
     yes: [
-      "任務完了！！", "完璧！！", "いざ出陣！！", "ナイスプレイ！！", "完っ璧！！",
-      "ミッションクリア！！", "スーパー完了！！", "やるね！！", "完璧すぎる！！",
-      "タスク・コンプリート！！", "すばらしい仕事ぶり！！", "栄光の完了者！！",
+      "任務完了・オブ・ザ・イヤー！！", "パーフェクト・ミッション・クリア！！",
+      "いざ出陣・ヒーローモード！！", "ナイス・デューティ・プレイヤー！！",
+      "完っ璧すぎる仕事ぶり！！", "タスク・コンプリート・マスター！！",
+      "すばらしい完了アチーブメント！！", "栄光のチェックマーク！！",
+      "デューティ・イズ・ダン！！", "あなたは責任感チャンピオン！！",
+      "ミッション・サクセス・フル！！", "今日の完了王に輝く！！",
+      "グッドジョブ・スーパーマン！！", "任務よ、さらば！！",
+      "コンプリート・アンド・スマイル！！", "やりましたパワー全開！！",
     ],
     praise: [
-      "えらい！感謝！", "神対応！！", "感謝感激！！", "ヒーロー！！", "最高！！",
-      "サンキュー・ベリー・マッチ！！", "あなたはサンシャイン！！", "神すぎる行動！！",
-      "感謝の嵐！！", "レジェンド対応！！", "スーパーサンクス！！", "えらいえらい！！",
+      "えらい！感謝！スーパーサンクス！！", "神対応オブ・ザ・デイ！！",
+      "感謝感激雨あられ！！", "ヒーロー・イン・ザ・ルーム！！",
+      "サンキュー・ベリー・ベリー・マッチ！！", "あなたはサンシャイン・パーソン！！",
+      "ゴミ袋チェンジ・レジェンド！！", "掃除機ダスト・ヒーロー！！",
+      "神すぎるボランティア精神！！", "感謝の嵐が到来中！！",
+      "スーパーウルトラ・サンクス！！", "えらいえらい・マキシマム！！",
+      "バッグ交換・オブ・グローリー！！", "ダストボックス・セイビア！！",
+      "あなたは清掃界の天使！！", "グレート・フル・ハート！！",
+      "今日のえらい人アワード！！", "サンクス・フォー・ザ・ミラクル！！",
     ],
     fail: [
-      "任務失敗…", "未完了…", "終了…", "ざんねん…", "また今度…",
-      "Sad Ending…", "運命は残酷…", "きょうはダメだった…", "リトライ推奨…",
+      "任務失敗・オブ・ザ・ウィーク…", "アンフィニッシュド・デューティ…",
+      "Sad Ending・イン・オフィス…", "運命はきょう残酷モード…",
+      "ざんねん・リトライ推奨…", "未完了・ノー・グッド…",
+      "ミッション・フェイールド…", "きょうはダメだったアワード…",
+      "責任感・スリープ中…", "また今度・プリーズ…",
+      "アンハッピー・エンド…", "タスク・イズ・スティル・リビング…",
+      "未完了パワー全開…（逆）", "デューティ・エスケープ？…",
+      "悲しいお知らせタイム…", "コンティニュー・フロム・チェックポイント…",
     ],
   };
-  let lastWinPhrase = "";
+  let lastPhraseByMode = {};
   const pickPhrase = mode => {
     const arr = FX_PHRASES[mode] || ["！！"];
     if (arr.length === 1) return arr[0];
     let s = arr[Math.floor(Math.random() * arr.length)];
-    // 連続で同じ当選フレーズを避ける
-    if (mode === "win") {
-      let guard = 0;
-      while (s === lastWinPhrase && guard++ < 8) s = arr[Math.floor(Math.random() * arr.length)];
-      lastWinPhrase = s;
-    }
+    let guard = 0;
+    while (s === lastPhraseByMode[mode] && guard++ < 10) s = arr[Math.floor(Math.random() * arr.length)];
+    lastPhraseByMode[mode] = s;
     return s;
   };
   // パチンコ風の配色（赤・金・白・黒・橙・紫）
@@ -581,24 +604,22 @@
   Object.values(SFX).forEach(a => { a.preload = "auto"; a.volume = 0.7; });
   const sadBgm = new Audio("/sounds/sad.mp3");
   sadBgm.preload = "auto"; sadBgm.loop = true; sadBgm.volume = 0.55;
-  let tickBusy = false;
+  let tickLastAt = 0;
   let tickInst = null;
   function playSfx(name, vol) {
     const base = SFX[name];
     if (!base) return;
-    // 回転ティック：再生中なら次は鳴らさない（重なり防止）
+    // 回転ティック：前回から0.3秒未満ならスキップ（重なりすぎ防止）
     if (name === "tick") {
-      if (tickBusy) return;
+      const now = performance.now();
+      if (now - tickLastAt < TICK_COOLDOWN_MS) return;
+      tickLastAt = now;
       try {
         if (tickInst) { try { tickInst.pause(); } catch (e) {} }
         tickInst = base.cloneNode();
         tickInst.volume = vol == null ? base.volume : vol;
-        tickBusy = true;
-        const free = () => { tickBusy = false; };
-        tickInst.addEventListener("ended", free, { once: true });
-        tickInst.addEventListener("pause", free, { once: true });
-        tickInst.play().catch(free);
-      } catch (e) { tickBusy = false; }
+        tickInst.play().catch(() => {});
+      } catch (e) { /* ignore */ }
       return;
     }
     try {
@@ -686,7 +707,8 @@
   let lastTickSector = 0;
 
   const key = (role, m) => role + "\u0000" + m;
-  const useWeekSlots = () => THIS_WEEK_SLOTS.length > 0;
+  let weekSlotsActive = true; // 保存後は false（次週は通常プール）
+  const useWeekSlots = () => weekSlotsActive && THIS_WEEK_SLOTS.length > 0;
 
   // ---------- モーダル ----------
   function modal(html, buttons, cls = "") {
@@ -854,7 +876,7 @@
           `<div class="head">任務完了！</div><div class="big">いざ出陣！</div><div class="head" style="margin-top:8px">【 ${esc(last)} 】さん ${esc(duty)}当番 完了</div>`,
           [{ label: "OK", value: true, cls: "red" }], "fx-yes");
       } else {
-        await splashFx("praise", "えらい！感謝！", 2600);
+        await splashFx("praise", pickPhrase("praise"), 2600);
         await modal(
           `<div class="big praise">えらい！感謝！</div><div class="big" style="font-size:clamp(28px,6vw,44px)">【 ${esc(last)} 】さん</div><div class="head">${esc(extraLabel)}</div>`,
           [{ label: "OK", value: true, cls: "red" }], "fx-praise");
@@ -1148,12 +1170,12 @@
       if (spinning) {
         const prevAng = angle;
         angle = (angle + speed) % 360;
-        // 矢印が40度進むごとに1回（速い＝ピロピロ、遅い＝間隔が開く）
+        // 矢印が20度進むごとに1回（ただし0.3秒以内の連続はキャンセル）
         let from = Math.floor(prevAng / TICK_DEG);
         const to = Math.floor(angle / TICK_DEG);
         const sectors = 360 / TICK_DEG;
         let steps = 0;
-        while (from !== to && steps < 3) {
+        while (from !== to && steps < 2) {
           from = (from + 1) % sectors;
           playSfx("tick", Math.min(0.85, 0.35 + speed / 40));
           steps++;
@@ -1209,7 +1231,23 @@
     }
   }
 
-  // ---------- クイズ答え → 保存 ----------
+  // ---------- クイズ答え → Teams連絡文 → コピーで初めて data 保存 ----------
+  const REPORT_URL = "https://docs.google.com/spreadsheets/d/1dQkSW-dIugdTNqJ4usAkveFnUkIfIhv-E9gh1wFX7O4/edit?usp=sharing";
+  const WIKI_URL = "https://www.hashimoto.lab.uec.ac.jp/intra/?%A5%B4%A5%DF%BC%CE%A4%C6%C5%F6%C8%D6";
+  function teamsMessage(gomi, souji) {
+    return (
+      "ゴミ捨て→ \n\n" +
+      (gomi || "未決定") + "\n" +
+      "掃除→ \n\n" +
+      (souji || "未決定") + "\n\n" +
+      " ★★★★★★★★★★★★\n" +
+      `当番報告スプレッドシート（${REPORT_URL} ）（←ここに報告！）\n` +
+      "★★★★★★★★★★★★\n\n\n\n" +
+      "・来週火曜日の時点できれいにしておくことを心がけてください！\n\n" +
+      `掃除・ゴミ捨て方法Wiki（${WIKI_URL} ）`
+    );
+  }
+
   async function afterFullSession() {
     let ans = null;
     try { ans = await (await fetch(API + "/quiz-answer", { cache: "no-store" })).json(); } catch (e) { /* 答えなし扱い */ }
@@ -1218,51 +1256,102 @@
       const img = ans.image ? `<img src="${ans.image}" alt="">` : "";
       await modal(`<div class="head" style="color:#a8dadc;font-size:34px">答え</div>${img}<div class="big">${esc(ans.answer)}</div>`,
         [{ label: "OK", value: true, cls: "red" }], "answer");
-    } else {
-      await modal(`<div class="head">今週の当番を保存します。</div><div class="body">OKを押すと履歴と連絡文を保存します。</div>`, [{ label: "OK", value: true, cls: "red" }]);
     }
-    await persistSessionEnd();
+    const pending = snapshotHistory();
+    const msg = teamsMessage(pending.last_gomi_winner, pending.last_souji_winner);
+    finished = false; busy = false; renderAll();
+    $("info").textContent = "まだ data には保存していません。Teams連絡文をコピーすると保存されます。";
+    const v = await modal(
+      `<div class="head">Teams連絡文（コピーで保存）</div><div class="body">「連絡文をコピーして保存」を押すと、当選・達成・倍率が roulette-data に反映されます。\n閉じるだけ／再読み込みなら、開く前の状態のままです。</div><textarea class="msg" readonly>${esc(msg)}</textarea>`,
+      [{ label: "連絡文をコピーして保存", value: "copy", cls: "red" }, { label: "保存せず閉じる", value: "close", cls: "dark" }]
+    );
+    if (v === "copy") {
+      const ok = await persistSessionEnd(pending);
+      if (ok) {
+        try { await navigator.clipboard.writeText(msg); } catch (e) {
+          const ta = document.createElement("textarea"); ta.value = msg; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+        }
+        weekSlotsActive = false;
+        finished = true; renderAll(); refreshArchiveStatus();
+        await info("保存＆コピー完了", "roulette-data に反映し、連絡文をコピーしました。\n次回起動から更新後の状態で始まります。");
+      }
+    } else {
+      await info("未保存", "今回の結果は data に書いていません。\nページを再読み込みすると、開く前の状態に戻ります。");
+    }
   }
 
   function snapshotHistory() {
-    const d = hist;
-    d.done_gomi = doneGomi; d.done_souji = doneSouji;
+    const d = { ...(hist || {}) };
+    d.done_gomi = [...doneGomi]; d.done_souji = [...doneSouji];
     d.last_gomi_winner = lastG; d.last_souji_winner = lastS;
-    d.weights_gomi = wG; d.weights_souji = wS;
+    d.weights_gomi = { ...wG }; d.weights_souji = { ...wS };
     d.pair_pending_souji = false; d.pair_session_excluded = [];
+    d.week_slots_finished = true;
+    alreadyDoneExempt.forEach(m => {
+      if (!d.done_gomi.includes(m)) d.done_gomi.push(m);
+      if (!d.done_souji.includes(m)) d.done_souji.push(m);
+    });
     const p = n => String(n).padStart(2, "0"), now = new Date();
     d.session_close_snapshot = {
       saved_at: `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`,
-      done_gomi: [...doneGomi], done_souji: [...doneSouji],
+      done_gomi: [...d.done_gomi], done_souji: [...d.done_souji],
       this_week_gomi_winner: lastG, this_week_souji_winner: lastS,
+      weights_gomi: { ...wG }, weights_souji: { ...wS },
     };
     return d;
   }
 
-  async function persistSessionEnd() {
-    let res;
+  async function persistSessionEnd(historyObj) {
     try {
-      res = await (await fetch(API + "/session-end", {
+      const res = await (await fetch(API + "/session-end", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ history: snapshotHistory() }),
+        body: JSON.stringify({ history: historyObj || snapshotHistory() }),
       })).json();
-    } catch (e) {
-      await info("保存できませんでした", "サーバーに接続できません。もう一度お試しください。");
-      return persistSessionEnd();
-    }
-    finished = true; busy = false; renderAll();
-    $("info").textContent = "今週の当番を保存しました。お疲れさまでした！";
-    await modal(
-      `<div class="head">履歴と連絡文を保存しました</div><div class="body">Teamsに貼る連絡文：</div><textarea class="msg" readonly>${esc(res.message)}</textarea>`,
-      [{ label: "連絡文をコピー", value: "copy" }, { label: "閉じる", value: "close", cls: "dark" }]
-    ).then(async v => {
-      if (v === "copy") {
-        try { await navigator.clipboard.writeText(res.message); } catch (e) {
-          const ta = document.createElement("textarea"); ta.value = res.message; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
-        }
-        await info("コピーしました", "連絡文をクリップボードにコピーしました。");
+      if (!res.ok) {
+        await info("保存失敗", res.error || "不明なエラー");
+        return false;
       }
-    });
+      hist = historyObj || hist;
+      $("info").textContent = "今週の当番を roulette-data に保存しました。";
+      return true;
+    } catch (e) {
+      await info("保存できませんでした", "サーバーに接続できません。もう一度「コピーして保存」を押してください。");
+      return false;
+    }
+  }
+
+  async function refreshArchiveStatus() {
+    const el = $("archStatus");
+    if (!el) return;
+    try {
+      const r = await (await fetch(API + "/archives", { cache: "no-store" })).json();
+      const list = r.archives || [];
+      const cur = list.find(a => a.current) || list[list.length - 1];
+      el.textContent = cur
+        ? `履歴 ${list.length}件 / 現在: ${cur.saved_at || cur.id}（ゴミ:${cur.gomi || "-"} 掃除:${cur.souji || "-"}）`
+        : "まだ週履歴はありません（コピー保存後に増えます）";
+      $("archPrevBtn").disabled = list.length < 2;
+      $("archNextBtn").disabled = list.length < 2;
+    } catch (e) {
+      el.textContent = "履歴を取得できません";
+    }
+  }
+
+  async function restoreArchive(direction) {
+    if (!confirm(direction === "prev"
+      ? "前の週のルーレット開始状態に戻しますか？（現在の data を上書き）"
+      : "次の週の状態へ進みますか？（現在の data を上書き）")) return;
+    try {
+      const r = await (await fetch(API + "/archives/restore", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction }),
+      })).json();
+      if (!r.ok) { await info("戻せませんでした", r.error || ""); return; }
+      await info("週履歴を復元", "ページを再読み込みして反映します。");
+      location.reload();
+    } catch (e) {
+      await info("戻せませんでした", "サーバーに接続できません。");
+    }
   }
 
   // ---------- 操作 ----------
@@ -1281,6 +1370,8 @@
   $("confirmBtn").onclick = confirmExclusions;
   $("cancelBtn").onclick = cancelConfirm;
   $("clearBtn").onclick = clearExclusions;
+  $("archPrevBtn").onclick = () => restoreArchive("prev");
+  $("archNextBtn").onclick = () => restoreArchive("next");
   $("spinBtn").onclick = toggleSpin;
   canvas.addEventListener("click", e => {
     if (busy || finished) return;
@@ -1314,35 +1405,45 @@
     // 掃除まで終わらず終了していたデータは無効化（メモリのみ）
     if (hist.pair_pending_souji) { hist.pair_pending_souji = false; hist.pair_session_excluded = []; hist.last_gomi_winner = null; }
     doneGomi = [...(hist.done_gomi || [])]; doneSouji = [...(hist.done_souji || [])];
-    // 前回当番：ゴミ=幡鎌 / 掃除=芝原（確認のため明示）
-    lastG = "幡鎌";
-    lastS = "芝原";
-    // 達成済み確認のため、前回当番は done から外す
-    doneGomi = doneGomi.filter(m => m !== lastG);
-    doneSouji = doneSouji.filter(m => m !== lastS);
-    // 総合倍率はブーストのみ（他は1倍）。履歴の余分な倍率は持ち込まない
-    wG = {}; wS = {};
-    applyThisWeekBoost();
+    lastG = hist.last_gomi_winner ?? null;
+    lastS = hist.last_souji_winner ?? null;
+    // 今週枠オーバーライドは、コピー保存が終わっていなければ有効
+    weekSlotsActive = !hist.week_slots_finished;
+    wG = { ...(hist.weights_gomi || {}) };
+    wS = { ...(hist.weights_souji || {}) };
+    if (weekSlotsActive) {
+      // 今週特別枠中はブーストを明示適用（他は1扱い）
+      wG = {}; wS = {};
+      applyThisWeekBoost();
+      // 確認のため前回当番は done から一旦外す
+      if (lastG) doneGomi = doneGomi.filter(m => m !== lastG);
+      if (lastS) doneSouji = doneSouji.filter(m => m !== lastS);
+    } else {
+      applyThisWeekBoost();
+    }
     renderWeekly();
     computePools(); renderAll();
+    refreshArchiveStatus();
     // 先に前回のゴミ・掃除の実施確認（達成済み処理より前）
     await checkPrevious(ROLE_GOMI);
     await checkPrevious(ROLE_SOUJI);
     await checkCycleReset();
     applyThisWeekBoost();
-    // ボランティア等：すでに実施済み → 達成済み扱い（自己申告とは別）
-    const ex = applyAlreadyDoneExemptions();
-    computePools();
-    if (ex.applied.length || ex.leftover.length) {
-      let body = "";
-      if (ex.applied.length) {
-        body += "【実施済み → 今週は達成済み扱い】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+    // ボランティア等：すでに実施済み → 達成済み扱い（自己申告とは別）／今週枠中のみ
+    if (weekSlotsActive) {
+      const ex = applyAlreadyDoneExemptions();
+      computePools();
+      if (ex.applied.length || ex.leftover.length) {
+        let body = "";
+        if (ex.applied.length) {
+          body += "【実施済み → 今週は達成済み扱い】\n" + ex.applied.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+        }
+        if (ex.leftover.length) {
+          body += "【次週へ持ち越し（今週枠にいなかった実施済み）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
+        }
+        body += "※右パネルの「自己申告：今週ルーレット免除」は別物です。\n毎週ヒアリングで、対象者からその週だけ外す用です。";
+        await info("実施済みの反映", body);
       }
-      if (ex.leftover.length) {
-        body += "【次週へ持ち越し（今週枠にいなかった実施済み）】\n" + ex.leftover.map(e => `・${e.name}（${e.reason}）`).join("\n") + "\n\n";
-      }
-      body += "※右パネルの「自己申告：今週ルーレット免除」は別物です。\n毎週ヒアリングで、対象者からその週だけ外す用です。";
-      await info("実施済みの反映", body);
     }
     busy = false; renderAll();
   }
