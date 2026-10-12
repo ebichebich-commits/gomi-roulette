@@ -121,23 +121,51 @@
   #status { font-size: 11px; opacity: .8; text-align: center; flex: 0 0 auto; }
   #winner {
     min-height: 0; width: 100%; text-align: center; white-space: pre-line; font-weight: 900;
-    font-size: clamp(15px, 1.7vw, 24px); padding: 6px 10px; border-radius: 10px;
-    color: #fff6c0; text-shadow: 0 0 14px rgba(255, 200, 0, .85), 0 2px 0 #5a0010;
-    background: linear-gradient(180deg, rgba(120, 0, 20, .65), rgba(40, 0, 20, .65));
-    border: 1px solid rgba(255, 210, 0, .5); flex: 0 0 auto;
+    font-size: clamp(15px, 1.7vw, 24px); padding: 8px 12px; border-radius: 10px;
+    color: #fff8d0;
+    text-shadow: 0 1px 0 #3a0010;
+    background: linear-gradient(180deg, rgba(20, 8, 0, .82), rgba(40, 12, 0, .88));
+    border: 2px solid rgba(255, 210, 0, .75);
+    box-shadow: inset 0 0 18px rgba(255, 200, 0, .12);
+    flex: 0 0 auto;
   }
-  #winner .gold-name, .modal .gold-name {
+  /* 金色名：赤背景に負けないよう実色＋黒縁（transparent clip は使わない） */
+  #winner .gold-name, .modal .gold-name, .modal.fx-win .big.gold-name {
     display: inline-block;
     font-weight: 900;
-    font-size: 1.25em;
-    background: linear-gradient(180deg, #fffef0 0%, #ffe27a 28%, #ffd000 48%, #b8860b 58%, #fff3a8 100%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 2px 0 #5a0010) drop-shadow(0 0 12px rgba(255, 210, 0, .95));
-    -webkit-text-stroke: 0.5px rgba(90, 0, 16, .35);
+    font-size: 1.35em;
+    color: #ffe566 !important;
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    background-clip: initial !important;
+    -webkit-text-fill-color: #ffe566;
+    -webkit-text-stroke: 0;
+    paint-order: stroke fill;
+    text-shadow:
+      -2px -2px 0 #3a1500,
+      2px -2px 0 #3a1500,
+      -2px 2px 0 #3a1500,
+      2px 2px 0 #3a1500,
+      0 0 10px rgba(255, 230, 80, .95),
+      0 0 22px rgba(255, 200, 0, .75),
+      0 3px 0 #5a2800;
+    filter: none;
   }
-  .modal.fx-win .gold-name {
-    font-size: clamp(44px, 11vw, 80px);
-    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 20px rgba(255, 210, 0, 1));
+  .modal.fx-win .gold-name, .modal.fx-win .big.gold-name {
+    font-size: clamp(48px, 12vw, 88px) !important;
+    color: #ffe566 !important;
+    -webkit-text-fill-color: #ffe566;
+    text-shadow:
+      -3px -3px 0 #2a1000,
+      3px -3px 0 #2a1000,
+      -3px 3px 0 #2a1000,
+      3px 3px 0 #2a1000,
+      0 0 16px #fff6a0,
+      0 0 36px #ffd000,
+      0 4px 0 #5a2800;
+  }
+  .modal.fx-win {
+    background: radial-gradient(circle at 50% 0%, #4a2810, #140808 70%) !important;
   }
 
   button {
@@ -356,14 +384,19 @@
   }
 
   .modal.fx-win {
-    background: radial-gradient(circle at 50% 0%, #8a1028, #1a0508 75%);
-    border-color: #ffd000; box-shadow: 0 0 50px rgba(255,200,0,.7), inset 0 0 40px rgba(255,60,60,.3);
+    background: radial-gradient(circle at 50% 0%, #4a2810, #140808 75%) !important;
+    border-color: #ffd000; box-shadow: 0 0 50px rgba(255,200,0,.7), inset 0 0 40px rgba(255,180,0,.2);
   }
   .modal.fx-win .big {
-    background: linear-gradient(180deg, #fff8c0, #ffd000 40%, #b8860b 55%, #fff3a8);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 3px 0 #5a0010) drop-shadow(0 0 18px rgba(255,200,0,.9));
     font-size: clamp(40px, 10vw, 72px);
+  }
+  .modal.fx-win .big.gold-name {
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    background-clip: initial !important;
+    color: #ffe566 !important;
+    -webkit-text-fill-color: #ffe566;
+    filter: none;
   }
   .modal.fx-praise {
     background: radial-gradient(circle at 50% 20%, #fff7c0, #ff6ad5 50%, #3a0080 100%);
@@ -478,14 +511,53 @@
   ];
   const TICK_DEG = 40;
   const FX_PHRASES = {
-    win: ["大当り！！", "決定！！", "超激アツ！！", "運命の選択！！", "ジャックポット！！"],
-    yes: ["任務完了！！", "完璧！！", "いざ出陣！！", "ナイスプレイ！！", "完っ璧！！"],
-    praise: ["えらい！感謝！", "神対応！！", "感謝感激！！", "ヒーロー！！", "最高！！"],
-    fail: ["任務失敗…", "未完了…", "終了…", "ざんねん…"],
+    win: [
+      "運命の選択！！", "あなたは選ばれし者！！", "伝説が始まる！！",
+      "奇跡の当選者！！", "栄光の瞬間！！", "神々の抽選！！",
+      "超・大勝利！！", "運命共同体アワード！！", "あなたの番が来た！！",
+      "歴史に残る決定！！", "最高にラッキーデイ！！", "星があなたを指した！！",
+      "おめでとうパワー全開！！", "今日の主役はあなた！！", "神引き確定！！",
+      "ルーレットは嘘をつかない！！", "天が選んだタレント！！", "奇跡的パーソン！！",
+      "ハイパーグッドラック！！", "あなたは今日のチャンピオン！！", "輝ける当選者様！！",
+      "運気爆上げ決定！！", "伝説級の当たり！！", "これぞ運命の出会い！！",
+      "スーパーウルトラ当選！！", "あなたの名前が光った！！", "運命よ、こんにちは！！",
+      "選ばれし掃除の勇者！！", "ゴミ界のスーパースター！！", "当番界のプリンス！！",
+      "おめでとうございますパワー！！", "栄光ある任務者！！", "ラッキーナンバー・ユー！！",
+      "今日のヒーロー・アピアランス！！", "すばらしいチョイス・オブ・デスティニー！！",
+      "あなたはウィン・ウィン・パーソン！！", "フォーチュン・スマイル・オン・ユー！！",
+      "ベリー・ベリー・コングラッチュレーション！！", "ミラクル・セレクション・タイム！！",
+      "ザ・チョーズン・ワン！！", "ビッグ・ウィン・モーメント！！", "ゴールデン・ラッキー・デイ！！",
+      "運命の歯車がカチッ！！", "宇宙があなたを指名！！", "天声人があなたを呼んだ！！",
+      "激アツ・ファイナルアンサー！！", "超絶ラッキー当選祭！！", "あなたに乾杯パワー！！",
+      "ウィンナー・ウィナー・チキンディナー！！", "おめでとう、運命の子よ！！",
+    ],
+    yes: [
+      "任務完了！！", "完璧！！", "いざ出陣！！", "ナイスプレイ！！", "完っ璧！！",
+      "ミッションクリア！！", "スーパー完了！！", "やるね！！", "完璧すぎる！！",
+      "タスク・コンプリート！！", "すばらしい仕事ぶり！！", "栄光の完了者！！",
+    ],
+    praise: [
+      "えらい！感謝！", "神対応！！", "感謝感激！！", "ヒーロー！！", "最高！！",
+      "サンキュー・ベリー・マッチ！！", "あなたはサンシャイン！！", "神すぎる行動！！",
+      "感謝の嵐！！", "レジェンド対応！！", "スーパーサンクス！！", "えらいえらい！！",
+    ],
+    fail: [
+      "任務失敗…", "未完了…", "終了…", "ざんねん…", "また今度…",
+      "Sad Ending…", "運命は残酷…", "きょうはダメだった…", "リトライ推奨…",
+    ],
   };
+  let lastWinPhrase = "";
   const pickPhrase = mode => {
     const arr = FX_PHRASES[mode] || ["！！"];
-    return arr[Math.floor(Math.random() * arr.length)];
+    if (arr.length === 1) return arr[0];
+    let s = arr[Math.floor(Math.random() * arr.length)];
+    // 連続で同じ当選フレーズを避ける
+    if (mode === "win") {
+      let guard = 0;
+      while (s === lastWinPhrase && guard++ < 8) s = arr[Math.floor(Math.random() * arr.length)];
+      lastWinPhrase = s;
+    }
+    return s;
   };
   // パチンコ風の配色（赤・金・白・黒・橙・紫）
   const SEG = [
@@ -509,9 +581,26 @@
   Object.values(SFX).forEach(a => { a.preload = "auto"; a.volume = 0.7; });
   const sadBgm = new Audio("/sounds/sad.mp3");
   sadBgm.preload = "auto"; sadBgm.loop = true; sadBgm.volume = 0.55;
+  let tickBusy = false;
+  let tickInst = null;
   function playSfx(name, vol) {
     const base = SFX[name];
     if (!base) return;
+    // 回転ティック：再生中なら次は鳴らさない（重なり防止）
+    if (name === "tick") {
+      if (tickBusy) return;
+      try {
+        if (tickInst) { try { tickInst.pause(); } catch (e) {} }
+        tickInst = base.cloneNode();
+        tickInst.volume = vol == null ? base.volume : vol;
+        tickBusy = true;
+        const free = () => { tickBusy = false; };
+        tickInst.addEventListener("ended", free, { once: true });
+        tickInst.addEventListener("pause", free, { once: true });
+        tickInst.play().catch(free);
+      } catch (e) { tickBusy = false; }
+      return;
+    }
     try {
       const a = base.cloneNode();
       a.volume = vol == null ? base.volume : vol;
