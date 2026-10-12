@@ -980,6 +980,7 @@
       if (!done.includes(last)) done.push(last);
       // 達成済み → 今週のルーレットから外す（ブースト対象・通常週どちらも）
       alreadyDoneExempt.add(last);
+      if (useWeekSlots()) activeWeekSlots = activeWeekSlots.filter(m => m !== last);
       delete wmap[last];
       if (r === "yes") {
         await splashFx("yes", pickPhrase("yes"), 2400);
@@ -1002,6 +1003,8 @@
       wS[last] = Math.max(Number(wS[last]) || 1, next);
       prevUnfinished.add(key(role, last));
       alreadyDoneExempt.delete(last);
+      // 残り枠の続きでも、未達成の前回当番は盤面に戻す
+      if (useWeekSlots() && !activeWeekSlots.includes(last)) activeWeekSlots.push(last);
       playSadBgm();
       await splashFx("fail", pickPhrase("fail"), 2200);
       await modal(
@@ -1032,6 +1035,7 @@
   }
 
   async function checkCycleReset() {
+    if (weekSlotsActive) return;
     const assigned = new Set([...doneGomi, ...doneSouji]);
     if (lastG) assigned.add(lastG);
     if (lastS) assigned.add(lastS);
@@ -1609,9 +1613,10 @@
       // 初回のみ：前回当番はゴミ=幡鎌 / 掃除=芝原
       lastG = "幡鎌";
       lastS = "芝原";
-      doneGomi = doneGomi.filter(m => m !== lastG);
-      doneSouji = doneSouji.filter(m => m !== lastS);
     }
+    // 直近の当番は、過去の周で完了済みでも必ず聞き直す（ゴミ・掃除の両方）
+    if (lastG) doneGomi = doneGomi.filter(m => m !== lastG);
+    if (lastS) doneSouji = doneSouji.filter(m => m !== lastS);
     const contrib = applyRoomContributionDiscounts();
     renderWeekly();
     computePools(); renderAll();
