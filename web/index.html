@@ -289,6 +289,8 @@
   #fx {
     position: fixed; inset: 0; z-index: 80; display: none; pointer-events: none;
     overflow: hidden;
+    color-scheme: only light;
+    forced-color-adjust: none;
   }
   #fx.on { display: block; pointer-events: auto; }
   #fx .fx-bg { position: absolute; inset: 0; }
@@ -327,18 +329,24 @@
   #fx.yes .fx-bg { background: #2a0008; }
   #fx .fx-feather, #fx .fx-spark, #fx .fx-fire {
     position: absolute; border-radius: 50%; pointer-events: none;
+    forced-color-adjust: none;
+    mix-blend-mode: plus-lighter;
   }
   #fx .fx-feather {
-    width: 18px; height: 28px; background: linear-gradient(180deg, #fff, #ddd); opacity: .85;
+    width: 18px; height: 28px;
+    background: linear-gradient(180deg, #ffffff 0%, #ffe9a0 55%, #ffd060 100%);
+    opacity: .95;
     border-radius: 50% 50% 40% 40%; animation: floatDown linear forwards;
-    box-shadow: 0 0 8px #fff;
+    box-shadow: 0 0 10px #fff, 0 0 18px #ffd000;
   }
   #fx .fx-spark {
-    width: 6px; height: 6px; background: #ffe27a; box-shadow: 0 0 10px #ffd000;
+    width: 7px; height: 7px; background: #fff6a0;
+    box-shadow: 0 0 8px #fff, 0 0 14px #ffd000, 0 0 22px #ff6a00;
     animation: sparkle ease-out forwards;
   }
   #fx .fx-fire {
-    width: 8px; height: 8px; background: #ffb000; box-shadow: 0 0 14px #ff4000;
+    width: 9px; height: 9px; background: #ffd060;
+    box-shadow: 0 0 10px #ffb000, 0 0 18px #ff4000, 0 0 28px #ff0040;
     animation: firework ease-out forwards;
   }
   #fx .fx-crown {
@@ -361,9 +369,12 @@
   #fx .fx-splash {
     position: absolute; left: 50%; top: 50%; z-index: 5;
     transform: translate(-50%, -50%);
-    width: min(96vw, 1100px); text-align: center; padding: 0 12px;
-    font-weight: 900; font-style: italic; letter-spacing: .06em;
-    font-size: clamp(52px, 12vw, 120px); line-height: 1.05;
+    width: max-content; max-width: 96vw; text-align: center; padding: 0 16px;
+    font-weight: 900; font-style: italic; letter-spacing: .04em;
+    /* 1行固定（変な位置で改行しない）。長い文は少し縮めて収める */
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: clamp(28px, 5.2vw, 88px); line-height: 1.15;
     color: #fff8c0;
     text-shadow:
       0 0 12px #fff,
@@ -466,7 +477,7 @@
     h1 { font-size: clamp(28px, 3.6vw, 48px); }
     #winner { font-size: clamp(13px, 1.4vw, 18px); }
     .attack { font-size: clamp(14px, 1.7vw, 20px); padding: 6px; }
-    #fx .fx-splash { font-size: clamp(40px, 9vw, 90px); }
+    #fx .fx-splash { font-size: clamp(26px, 4.8vw, 72px); white-space: nowrap; }
   }
 </style>
 </head>
@@ -710,11 +721,19 @@
   }
   function spawnParticles(kind, n) {
     const layer = $("fx").querySelector(".fx-layer");
+    const palette = kind === "fx-feather"
+      ? ["#ffffff", "#fff6c0", "#ffe27a", "#ffd0e8"]
+      : kind === "fx-fire"
+        ? ["#ffd060", "#ff9a00", "#ff4b2b", "#fff0a0"]
+        : ["#ffffff", "#ffe27a", "#ffd000", "#ff8a3d", "#ff5ad5"];
     for (let i = 0; i < n; i++) {
       const el = document.createElement("div");
       el.className = kind;
+      const c = palette[i % palette.length];
       el.style.left = Math.random() * 100 + "%";
       el.style.top = (kind === "fx-feather" ? -5 : 20 + Math.random() * 50) + "%";
+      el.style.background = c;
+      el.style.boxShadow = `0 0 8px #fff, 0 0 16px ${c}, 0 0 28px ${c}`;
       const dx = (Math.random() - 0.5) * 220, dy = (Math.random() - 0.5) * 220;
       el.style.setProperty("--dx", dx + "px");
       el.style.setProperty("--dy", dy + "px");
