@@ -1791,9 +1791,9 @@
     weekSlotsActive = weekSlotsContinue || !hist.week_slots_finished;
     activeWeekSlots = weekSlotsContinue ? [...remSlots] : [...THIS_WEEK_SLOTS];
     if (weekSlotsActive && !weekSlotsContinue) {
-      // 初回のみ：前回当番はゴミ=幡鎌 / 掃除=芝原
-      lastG = "幡鎌";
-      lastS = "芝原";
+      // 初回のみ：前回当番が未設定ならゴミ=幡鎌 / 掃除=芝原
+      if (!lastG) lastG = "幡鎌";
+      if (!lastS) lastS = "芝原";
     }
     // 直近の当番は、過去の周で完了済みでも必ず聞き直す（ゴミ・掃除の両方）
     if (lastG) doneGomi = doneGomi.filter(m => m !== lastG);
