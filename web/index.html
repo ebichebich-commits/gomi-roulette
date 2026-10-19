@@ -1845,7 +1845,7 @@
     computePools();
     if (weekSlotsActive) {
       const left = wheelNames();
-      if (left.length === 0) {
+      if (left.length <= 2) {
         await celebrateAndRestart(left);
         restarted = true;
       }
