@@ -1784,6 +1784,10 @@
     wS = { ...(hist.weights_souji || {}) };
     forgetCounts = { ...(hist.forget_counts || {}) };
     volunteerExempt = new Set(hist.volunteer_exempt || []);
+    volunteerExempt.forEach(m => {
+      markAlreadyDone(m);
+      weeklyExcluded.add(m);
+    });
     luckyRest = new Set(hist.lucky_rest || []);
     loadExemptCycles();
     const remSlots = Array.isArray(hist.week_remaining_slots) ? hist.week_remaining_slots.filter(Boolean) : [];
@@ -1831,7 +1835,7 @@
     computePools();
     if (weekSlotsActive) {
       const left = wheelNames();
-      if (left.length <= 2) {
+      if (left.length === 0) {
         await celebrateAndRestart(left);
         restarted = true;
       }
