@@ -1233,7 +1233,7 @@
       const prob = inPool && total > 0 ? (r.w / total) * 100 : 0;
       const bar = Math.max(4, Math.round((r.w / maxW) * 100));
       let st = "抽選対象";
-      if (luckyRest.has(r.m)) st = "ラッキーお休み";
+      if (luckyRest.has(r.m)) st = "おめでとう免除（ラッキーお休み）";
       else if (volunteerExempt.has(r.m)) {
         const more = exemptCyclesLeft[r.m] || 0;
         st = more > 0 ? `ボランティア免除（あと${more}周）` : "ボランティア免除（この周で最後）";
@@ -1280,7 +1280,7 @@
       const more = exemptCyclesLeft[m] || 0;
       locked.push([m, more > 0 ? `ボランティア免除・あと${more}周` : "ボランティア免除・この周で最後"]);
     });
-    luckyRest.forEach(m => { if (!volunteerExempt.has(m)) locked.push([m, "ラッキーお休み"]); });
+    luckyRest.forEach(m => { if (!volunteerExempt.has(m)) locked.push([m, "おめでとう免除（ラッキーお休み）"]); });
     locked.forEach(([m, tag]) => {
       const l = document.createElement("label");
       const c = document.createElement("input");
@@ -1596,7 +1596,13 @@
     let ans = null;
     try { ans = await (await fetch(API + "/quiz-answer", { cache: "no-store" })).json(); } catch (e) { /* 答えなし扱い */ }
     if (ans && ans.answer) {
-      await modal(`<div class="row2">今週のクイズ　答えはこちら</div>`, [{ label: "進", value: true }], "tabquiz");
+      const qText = (weekly && weekly.quiz_question) || "";
+      await modal(
+        `<div class="head" style="color:#ffd060;font-size:26px">今週のクイズ！！</div>` +
+        (qText ? `<div class="big" style="font-size:clamp(20px,4.5vw,32px);margin:16px 0;line-height:1.45;color:#fff">${esc(qText)}</div>` : "") +
+        `<div class="row2" style="margin-top:14px;font-size:18px;color:#a8dadc">答えはこちら ≫</div>`,
+        [{ label: "進", value: true, cls: "red" }], "tabquiz"
+      );
       const img = ans.image ? `<img src="${ans.image}" alt="">` : "";
       await modal(`<div class="head" style="color:#a8dadc;font-size:34px">答え</div>${img}<div class="big">${esc(ans.answer)}</div>`,
         [{ label: "OK", value: true, cls: "red" }], "answer");
@@ -1789,6 +1795,10 @@
       weeklyExcluded.add(m);
     });
     luckyRest = new Set(hist.lucky_rest || []);
+    luckyRest.forEach(m => {
+      markAlreadyDone(m);
+      weeklyExcluded.add(m);
+    });
     loadExemptCycles();
     const remSlots = Array.isArray(hist.week_remaining_slots) ? hist.week_remaining_slots.filter(Boolean) : [];
     weekSlotsContinue = remSlots.length > 0;
