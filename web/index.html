@@ -562,6 +562,8 @@
   // 残メンバー + 帳尻合わせ追加（幡鎌・中田は重複枠）
   const THIS_WEEK_SLOTS = ["幡鎌", "若旅", "中田", "田中", "芝原", "陳", "白井", "幡鎌", "中田", "伊賀", "上出"];
   const THIS_WEEK_BOOST = { "幡鎌": 10, "芝原": 10, "上出": 3 };
+  // 今回限りの特別倍率（個人的な恨み枠）
+  const ONE_TIME_BOOST = { "山中": 99 };
   // 部屋への貢献 → 同名が複数あればその回数だけ ×0.9（保存時に1回だけ反映）
   // 今週枠にいる人は同時に「達成済み扱い」でルーレット対象外
   const ROOM_CONTRIBUTIONS = [
@@ -930,6 +932,10 @@
       // ペナルティ(>1)は大きい方、貢献割引(<1)は小さい方を採用
       merged[m] = w > 1 ? Math.max(cur, w) : Math.min(cur, w);
     }
+    // 今回限りの特別倍率
+    for (const [m, mul] of Object.entries(ONE_TIME_BOOST)) {
+      merged[m] = Math.max(Number(merged[m]) || 1.0, mul);
+    }
     // 今週特別枠のブーストは枠が終わるまでだけ重ねる（保存後は消える）
     if (useWeekSlots() && !weekSlotsContinue) {
       for (const [m, mul] of Object.entries(THIS_WEEK_BOOST)) {
@@ -944,11 +950,14 @@
     members.forEach(m => { if (merged[m] == null) merged[m] = 1; });
     return merged;
   }
-  /** 総合危険度：ゴミ／掃除の高い方（今週枠ブースト＋未実施＋貢献割引） */
+  /** 総合危険度：ゴミ／掃除の高い方（今週枠ブースト＋未実施＋貢献割引＋今回特別枠） */
   function personalWeight(m) {
     const gw = wG[m] != null ? Number(wG[m]) : 1;
     const sw = wS[m] != null ? Number(wS[m]) : 1;
     let w = Math.max(gw, sw);
+    if (ONE_TIME_BOOST[m]) {
+      w = Math.max(w, ONE_TIME_BOOST[m]);
+    }
     if (useWeekSlots() && !weekSlotsContinue && THIS_WEEK_BOOST[m]) {
       w = Math.max(w, THIS_WEEK_BOOST[m]);
     }
@@ -1226,7 +1235,7 @@
     const poolSet = new Set(useRole ? activePool() : members);
     const total = rows.reduce((s, r) => s + (poolSet.has(r.m) ? r.w : 0), 0);
     const maxW = Math.max(1, ...rows.map(r => r.w));
-    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n${useWeekSlots() && !weekSlotsContinue ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1\n" : ""}${useWeekSlots() && weekSlotsContinue ? "残り枠の続き（未抽選メンバー）\n" : ""}未実施「いいえ」→ 現倍率×10（例:10→100）で残る\n達成確認のあと 3人以上→継続 / 2人以下→勝利して一周リセット\nやり忘れ n回 → 一周終了時に ×(3/10)^n（2回で100倍→9倍）\n部屋貢献→ 1回ごと×0.9（同名は繰り返し）</div>`;
+    let h = `<div class="rank-note">総合危険度（相対割合＝ルーレット角度と同じ計算）\n【今回限定】山中=99倍（個人的な恨み枠）\n${useWeekSlots() && !weekSlotsContinue ? "今週枠：幡鎌・芝原=10 / 上出=3 / 他=1\n" : ""}${useWeekSlots() && weekSlotsContinue ? "残り枠の続き（未抽選メンバー）\n" : ""}未実施「いいえ」→ 現倍率×10（例:10→100）で残る\n達成確認のあと 3人以上→継続 / 2人以下→勝利して一周リセット\nやり忘れ n回 → 一周終了時に ×(3/10)^n（2回で100倍→9倍）\n部屋貢献→ 1回ごと×0.9（同名は繰り返し）</div>`;
     h += `<div class="rank-sec">── ${useRole ? roleName(drawRole) + "抽選の相対" : "総合"}ランキング ──</div>`;
     rows.forEach((r, i) => {
       const inPool = poolSet.has(r.m) && !isOutOfWheel(r.m);
